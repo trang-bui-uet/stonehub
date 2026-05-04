@@ -1,50 +1,32 @@
-import templateWorkbookFileUrl from "@/assets/template-thien-phuc.xlsx?url"
+import templateWorkbookFileUrl from "@/assets/template-tp.xlsx?url"
 import templateConfigJson from "@/config/template-thien-phuc-config.json"
 import type { readSupplierWorkbookFromFile } from "@/lib/supplier-workbook-reader"
 import ExcelJS from "exceljs"
 
 type SupplierWorkbookData = Awaited<ReturnType<typeof readSupplierWorkbookFromFile>>
 type TemplateGeneralInfoMapping = Readonly<{
-  "container#": string
   materialName: string
-  typeOfPolish: string
-  numberOfSlabs: string
-  loadingDate: string
-  invoiceNumber: string
-  invoiceDate: string
-  containerNumber: string
 }>
 type TemplateColumnMapping = Readonly<{
   slabNoGross: string
   lengthGross: string
   widthGross: string
   grossSquareMeter: string
+  slabNoNet: string
   lengthNet: string
   widthNet: string
   netSquareMeter: string
-  freshOrVariation: string
-}>
-type TemplateSummaryRowMapping = Readonly<{
-  numberOfSlabs: string
-  grossSquareMeter: string
-  netSquareMeter: string
-  percentage: string
-}>
-type TemplateSummaryMapping = Readonly<{
-  fresh: TemplateSummaryRowMapping
-  lineVariation: TemplateSummaryRowMapping
-  total: TemplateSummaryRowMapping
 }>
 type TemplateThienPhucConfig = Readonly<{
   sheetIndex: number
   dataStartRowIndex: number
   generalInfoMapping: TemplateGeneralInfoMapping
   columnMapping: TemplateColumnMapping
-  summaryMapping: TemplateSummaryMapping
 }>
 const CENTIMETER_SQUARE_TO_METER_SQUARE = 10_000
-const PERCENTAGE_100_TEXT = "100%"
-const PERCENTAGE_0_TEXT = "0%"
+const GROSS_MEASUREMENT_TEXT = "GROSS MEASUREMENT"
+const DEFAULT_MATERIAL_NAME_TEXT = "Material Name"
+const NET_MEASUREMENT_TEXT = "NET MEASUREMENT"
 const TEMPLATE_CONFIG: TemplateThienPhucConfig = templateConfigJson as TemplateThienPhucConfig
 
 function setCellValue(worksheet: ExcelJS.Worksheet, cellAddress: string, value: string | number): void {
@@ -58,6 +40,22 @@ function setCellFormula(
   result: number,
 ): void {
   worksheet.getCell(cellAddress).value = { formula, result }
+}
+function recreateMergedRange(worksheet: ExcelJS.Worksheet, rangeAddress: string): void {
+  try {
+    worksheet.unMergeCells(rangeAddress)
+  } catch {}
+  try {
+    worksheet.mergeCells(rangeAddress)
+  } catch {}
+}
+
+function setFooterLabel(worksheet: ExcelJS.Worksheet, cellAddress: string, value: string): void {
+  const cell = worksheet.getCell(cellAddress)
+  if (typeof cell.value === "string" && cell.value.trim() !== "") {
+    return
+  }
+  setCellValue(worksheet, cellAddress, value)
 }
 
 function calculateSquareMeter(length: number | null, width: number | null): number {
@@ -76,45 +74,11 @@ function normalizeTextValue(value: string): string {
 }
 
 function setGeneralInfo(worksheet: ExcelJS.Worksheet, workbookData: SupplierWorkbookData): void {
-  setCellValue(
-    worksheet,
-    TEMPLATE_CONFIG.generalInfoMapping["container#"],
-    normalizeTextValue(workbookData.generalInfo.containerNumber),
-  )
-  setCellValue(
-    worksheet,
-    TEMPLATE_CONFIG.generalInfoMapping.containerNumber,
-    normalizeTextValue(workbookData.generalInfo.containerNumber),
-  )
+  const resolvedMaterialName = normalizeTextValue(workbookData.generalInfo.materialName) || DEFAULT_MATERIAL_NAME_TEXT
   setCellValue(
     worksheet,
     TEMPLATE_CONFIG.generalInfoMapping.materialName,
-    normalizeTextValue(workbookData.generalInfo.materialName),
-  )
-  setCellValue(
-    worksheet,
-    TEMPLATE_CONFIG.generalInfoMapping.typeOfPolish,
-    normalizeTextValue(workbookData.generalInfo.typeOfPolish),
-  )
-  setCellValue(
-    worksheet,
-    TEMPLATE_CONFIG.generalInfoMapping.numberOfSlabs,
-    workbookData.rows.length,
-  )
-  setCellValue(
-    worksheet,
-    TEMPLATE_CONFIG.generalInfoMapping.loadingDate,
-    normalizeTextValue(workbookData.generalInfo.loadingDate),
-  )
-  setCellValue(
-    worksheet,
-    TEMPLATE_CONFIG.generalInfoMapping.invoiceNumber,
-    normalizeTextValue(workbookData.generalInfo.invoiceNumber),
-  )
-  setCellValue(
-    worksheet,
-    TEMPLATE_CONFIG.generalInfoMapping.invoiceDate,
-    normalizeTextValue(workbookData.generalInfo.invoiceDate),
+    resolvedMaterialName,
   )
 }
 
@@ -139,6 +103,7 @@ function setRowData(
       `=${TEMPLATE_CONFIG.columnMapping.lengthGross}${currentRowNumber}*${TEMPLATE_CONFIG.columnMapping.widthGross}${currentRowNumber}/${CENTIMETER_SQUARE_TO_METER_SQUARE}`,
       roundNumberToTwoDigits(grossSquareMeter),
     )
+    setCellValue(worksheet, `${TEMPLATE_CONFIG.columnMapping.slabNoNet}${currentRowNumber}`, row.slabNoNet)
     setCellValue(worksheet, `${TEMPLATE_CONFIG.columnMapping.lengthNet}${currentRowNumber}`, row.lengthNet ?? "")
     setCellValue(worksheet, `${TEMPLATE_CONFIG.columnMapping.widthNet}${currentRowNumber}`, row.widthNet ?? "")
     setCellFormula(
@@ -147,7 +112,6 @@ function setRowData(
       `=${TEMPLATE_CONFIG.columnMapping.lengthNet}${currentRowNumber}*${TEMPLATE_CONFIG.columnMapping.widthNet}${currentRowNumber}/${CENTIMETER_SQUARE_TO_METER_SQUARE}`,
       roundNumberToTwoDigits(netSquareMeter),
     )
-    setCellValue(worksheet, `${TEMPLATE_CONFIG.columnMapping.freshOrVariation}${currentRowNumber}`, "Fresh")
   }
   return { nextRowNumber: TEMPLATE_CONFIG.dataStartRowIndex + workbookData.rows.length, grossTotalSquareMeter, netTotalSquareMeter }
 }
@@ -168,11 +132,15 @@ function prepareTemplateDataRows(worksheet: ExcelJS.Worksheet, dataRowCount: num
 function setTotalRow(
   worksheet: ExcelJS.Worksheet,
   totalRowNumber: number,
-  workbookData: SupplierWorkbookData,
   grossTotalSquareMeter: number,
   netTotalSquareMeter: number,
 ): void {
-  setCellValue(worksheet, `${TEMPLATE_CONFIG.columnMapping.slabNoGross}${totalRowNumber}`, "Total")
+  const grossLabelRange = `${TEMPLATE_CONFIG.columnMapping.slabNoGross}${totalRowNumber}:${TEMPLATE_CONFIG.columnMapping.widthGross}${totalRowNumber}`
+  const netLabelRange = `${TEMPLATE_CONFIG.columnMapping.slabNoNet}${totalRowNumber}:${TEMPLATE_CONFIG.columnMapping.widthNet}${totalRowNumber}`
+  recreateMergedRange(worksheet, grossLabelRange)
+  recreateMergedRange(worksheet, netLabelRange)
+  setFooterLabel(worksheet, `${TEMPLATE_CONFIG.columnMapping.slabNoGross}${totalRowNumber}`, GROSS_MEASUREMENT_TEXT)
+  setFooterLabel(worksheet, `${TEMPLATE_CONFIG.columnMapping.slabNoNet}${totalRowNumber}`, NET_MEASUREMENT_TEXT)
   setCellValue(
     worksheet,
     `${TEMPLATE_CONFIG.columnMapping.grossSquareMeter}${totalRowNumber}`,
@@ -183,34 +151,6 @@ function setTotalRow(
     `${TEMPLATE_CONFIG.columnMapping.netSquareMeter}${totalRowNumber}`,
     roundNumberToTwoDigits(netTotalSquareMeter),
   )
-  setCellValue(worksheet, TEMPLATE_CONFIG.summaryMapping.fresh.numberOfSlabs, workbookData.rows.length)
-  setCellValue(
-    worksheet,
-    TEMPLATE_CONFIG.summaryMapping.fresh.grossSquareMeter,
-    roundNumberToTwoDigits(grossTotalSquareMeter),
-  )
-  setCellValue(
-    worksheet,
-    TEMPLATE_CONFIG.summaryMapping.fresh.netSquareMeter,
-    roundNumberToTwoDigits(netTotalSquareMeter),
-  )
-  setCellValue(worksheet, TEMPLATE_CONFIG.summaryMapping.fresh.percentage, PERCENTAGE_100_TEXT)
-  setCellValue(worksheet, TEMPLATE_CONFIG.summaryMapping.lineVariation.numberOfSlabs, 0)
-  setCellValue(worksheet, TEMPLATE_CONFIG.summaryMapping.lineVariation.grossSquareMeter, 0)
-  setCellValue(worksheet, TEMPLATE_CONFIG.summaryMapping.lineVariation.netSquareMeter, 0)
-  setCellValue(worksheet, TEMPLATE_CONFIG.summaryMapping.lineVariation.percentage, PERCENTAGE_0_TEXT)
-  setCellValue(worksheet, TEMPLATE_CONFIG.summaryMapping.total.numberOfSlabs, workbookData.rows.length)
-  setCellValue(
-    worksheet,
-    TEMPLATE_CONFIG.summaryMapping.total.grossSquareMeter,
-    roundNumberToTwoDigits(grossTotalSquareMeter),
-  )
-  setCellValue(
-    worksheet,
-    TEMPLATE_CONFIG.summaryMapping.total.netSquareMeter,
-    roundNumberToTwoDigits(netTotalSquareMeter),
-  )
-  setCellValue(worksheet, TEMPLATE_CONFIG.summaryMapping.total.percentage, PERCENTAGE_100_TEXT)
 }
 
 function buildOutputFileName(workbookData: SupplierWorkbookData): string {
@@ -221,7 +161,7 @@ function buildOutputFileName(workbookData: SupplierWorkbookData): string {
 }
 
 /**
- * Export list file from workbook data using Thiên Phúc template.
+ * Export list file from workbook data using TP template.
  */
 export async function exportSupplierListFile(workbookData: SupplierWorkbookData): Promise<void> {
   const templateResponse = await fetch(templateWorkbookFileUrl)
@@ -239,7 +179,7 @@ export async function exportSupplierListFile(workbookData: SupplierWorkbookData)
   const totalRowNumber = prepareTemplateDataRows(worksheet, workbookData.rows.length)
   setGeneralInfo(worksheet, workbookData)
   const { grossTotalSquareMeter, netTotalSquareMeter } = setRowData(worksheet, workbookData)
-  setTotalRow(worksheet, totalRowNumber, workbookData, grossTotalSquareMeter, netTotalSquareMeter)
+  setTotalRow(worksheet, totalRowNumber, grossTotalSquareMeter, netTotalSquareMeter)
   const outputFileName = buildOutputFileName(workbookData)
   const outputBuffer = await workbook.xlsx.writeBuffer()
   const fileBlob = new Blob([outputBuffer], {

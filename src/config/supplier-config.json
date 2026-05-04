@@ -19,7 +19,7 @@
       },
       "generalInfoMapping": {
         "containerNumber": "A3:B3",
-        "materialName": null,
+        "materialName": "A1:I1",
         "numberOfSlabs": "G5:I5",
         "loadingDate": "C5:D5",
         "invoiceNumber": "E3:F3",
@@ -58,7 +58,7 @@
         "sheetName": "PL",
         "headerRowIndex": 11,
         "firstDataRowIndex": 12,
-        "stopKeywords": ["TOTAL", "Total"],
+        "stopKeywords": ["TOTAL", "Total", "GROSS MEASUREMENT", "NET MEASUREMENT"],
         "stopIfEmpty": true
       },
       "columnMapping": {

@@ -1,6 +1,8 @@
 import supplierConfigJson from "@/config/supplier-config.json"
+import { Button } from "@/components/ui/button"
 import { readSupplierWorkbookFromFile } from "@/lib/supplier-workbook-reader"
 import { exportSupplierListFile } from "@/lib/template-list-exporter"
+import { Minus, Plus } from "lucide-react"
 import type { ChangeEvent, ReactElement } from "react"
 import { useMemo, useState } from "react"
 
@@ -16,6 +18,7 @@ type SupplierWorkbookData = Awaited<ReturnType<typeof readSupplierWorkbookFromFi
 
 const SUPPLIER_CONFIG: SupplierConfigRoot = supplierConfigJson as SupplierConfigRoot
 const CENTIMETER_SQUARE_TO_METER_SQUARE = 10_000
+const DEFAULT_DIMENSION_ADJUSTMENT_INPUT = "0"
 
 function calculateSquareMeter(length: number | null, width: number | null): number | null {
   if (length === null || width === null) {
@@ -36,16 +39,70 @@ function calculateTotalSquareMeter(
   return Math.round(totalValue * 100) / 100
 }
 
+function getAdjustedDimension(value: number | null, adjustmentInCentimeter: number): number | null {
+  if (value === null) {
+    return null
+  }
+  return value + adjustmentInCentimeter
+}
+
 export default function CreateListPage(): ReactElement {
   const [selectedSupplierName, setSelectedSupplierName] = useState<string>(SUPPLIER_CONFIG.suppliers[0]?.name ?? "")
   const [isReadingFile, setIsReadingFile] = useState<boolean>(false)
   const [isCreatingList, setIsCreatingList] = useState<boolean>(false)
   const [errorMessage, setErrorMessage] = useState<string>("")
   const [workbookData, setWorkbookData] = useState<SupplierWorkbookData | null>(null)
+  const [dimensionAdjustmentInput, setDimensionAdjustmentInput] = useState<string>(
+    DEFAULT_DIMENSION_ADJUSTMENT_INPUT,
+  )
   const supplierNames = useMemo(
     (): readonly string[] => SUPPLIER_CONFIG.suppliers.map((supplier: SupplierConfigItem): string => supplier.name),
     [],
   )
+  const dimensionAdjustmentInCentimeter = useMemo((): number => {
+    const trimmedInput = dimensionAdjustmentInput.trim()
+    if (trimmedInput === "") {
+      return 0
+    }
+    const parsedValue = Number(trimmedInput)
+    if (Number.isNaN(parsedValue) || !Number.isInteger(parsedValue)) {
+      return 0
+    }
+    return parsedValue
+  }, [dimensionAdjustmentInput])
+  const adjustedWorkbookData = useMemo((): SupplierWorkbookData | null => {
+    if (!workbookData) {
+      return null
+    }
+    const adjustedRows = workbookData.rows.map((row: SupplierWorkbookData["rows"][number]) => ({
+      ...row,
+      lengthGross: getAdjustedDimension(row.lengthGross, dimensionAdjustmentInCentimeter),
+      widthGross: getAdjustedDimension(row.widthGross, dimensionAdjustmentInCentimeter),
+      lengthNet: getAdjustedDimension(row.lengthNet, dimensionAdjustmentInCentimeter),
+      widthNet: getAdjustedDimension(row.widthNet, dimensionAdjustmentInCentimeter),
+    }))
+    return {
+      ...workbookData,
+      rows: adjustedRows,
+    }
+  }, [dimensionAdjustmentInCentimeter, workbookData])
+  function handleDimensionAdjustmentChange(value: string): void {
+    if (value.trim() === "") {
+      setDimensionAdjustmentInput("")
+      return
+    }
+    const parsedValue = Number(value)
+    if (Number.isNaN(parsedValue) || !Number.isInteger(parsedValue)) {
+      return
+    }
+    setDimensionAdjustmentInput(value)
+  }
+  function increaseDimensionAdjustment(): void {
+    setDimensionAdjustmentInput((dimensionAdjustmentInCentimeter + 1).toString())
+  }
+  function decreaseDimensionAdjustment(): void {
+    setDimensionAdjustmentInput((dimensionAdjustmentInCentimeter - 1).toString())
+  }
   async function handleUploadFile(event: ChangeEvent<HTMLInputElement>): Promise<void> {
     const inputFile = event.target.files?.[0]
     if (!inputFile) {
@@ -59,6 +116,7 @@ export default function CreateListPage(): ReactElement {
     setIsReadingFile(true)
     setErrorMessage("")
     setWorkbookData(null)
+    setDimensionAdjustmentInput(DEFAULT_DIMENSION_ADJUSTMENT_INPUT)
     try {
       const parsedWorkbookData = await readSupplierWorkbookFromFile({ file: inputFile, supplierName: selectedSupplierName })
       setWorkbookData(parsedWorkbookData)
@@ -71,14 +129,14 @@ export default function CreateListPage(): ReactElement {
     }
   }
   async function handleCreateList(): Promise<void> {
-    if (!workbookData) {
+    if (!adjustedWorkbookData) {
       setErrorMessage("Vui lòng tải dữ liệu trước khi tạo list.")
       return
     }
     setErrorMessage("")
     setIsCreatingList(true)
     try {
-      await exportSupplierListFile(workbookData)
+      await exportSupplierListFile(adjustedWorkbookData)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Không thể tạo file list."
       setErrorMessage(message)
@@ -127,6 +185,43 @@ export default function CreateListPage(): ReactElement {
         {errorMessage ? (
           <p className="rounded-md border border-red-400 bg-red-50 px-3 py-2 text-sm text-red-700">{errorMessage}</p>
         ) : null}
+        <div className="space-y-2">
+          <label className="space-y-1 block">
+            <span className="text-sm font-medium">Điều chỉnh kích thước (+/- cm)</span>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                size="icon-sm"
+                variant="outline"
+                onClick={decreaseDimensionAdjustment}
+                disabled={!workbookData || isReadingFile || isCreatingList}
+                aria-label="Giảm điều chỉnh kích thước"
+              >
+                <Minus />
+              </Button>
+              <input
+                className="w-24 rounded-md border px-3 py-2 text-sm"
+                style={{ borderColor: "var(--input)", backgroundColor: "var(--background)" }}
+                type="number"
+                step="1"
+                value={dimensionAdjustmentInput}
+                onChange={(event: ChangeEvent<HTMLInputElement>): void => handleDimensionAdjustmentChange(event.target.value)}
+                disabled={!workbookData || isReadingFile || isCreatingList}
+              />
+              <span className="text-sm font-medium">cm</span>
+              <Button
+                type="button"
+                size="icon-sm"
+                variant="outline"
+                onClick={increaseDimensionAdjustment}
+                disabled={!workbookData || isReadingFile || isCreatingList}
+                aria-label="Tăng điều chỉnh kích thước"
+              >
+                <Plus />
+              </Button>
+            </div>
+          </label>
+        </div>
         <div className="flex justify-end">
           <button
             className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
@@ -138,42 +233,42 @@ export default function CreateListPage(): ReactElement {
           </button>
         </div>
       </section>
-      {workbookData ? (
+      {adjustedWorkbookData ? (
         <section className="space-y-4">
           <div className="rounded-xl border p-4" style={{ borderColor: "var(--border)" }}>
             <h2 className="text-base font-semibold">Thông tin chung</h2>
             <div className="mt-3 grid gap-3 text-sm md:grid-cols-2">
               <div>
                 <span className="font-medium">Nhà cung cấp: </span>
-                <span>{workbookData.supplierName || "XXX"}</span>
+                <span>{adjustedWorkbookData.supplierName || "XXX"}</span>
               </div>
               <div>
                 <span className="font-medium">Container Number: </span>
-                <span>{workbookData.generalInfo.containerNumber || "XXX"}</span>
+                <span>{adjustedWorkbookData.generalInfo.containerNumber || "XXX"}</span>
               </div>
               <div>
                 <span className="font-medium">Material: </span>
-                <span>{workbookData.generalInfo.materialName || "XXX"}</span>
+                <span>{adjustedWorkbookData.generalInfo.materialName || "XXX"}</span>
               </div>
               <div>
                 <span className="font-medium">Type of polish: </span>
-                <span>{workbookData.generalInfo.typeOfPolish || "XXX"}</span>
+                <span>{adjustedWorkbookData.generalInfo.typeOfPolish || "XXX"}</span>
               </div>
               <div>
                 <span className="font-medium">Số lượng slabs: </span>
-                <span>{workbookData.rows.length || "XXX"}</span>
+                <span>{adjustedWorkbookData.rows.length || "XXX"}</span>
               </div>
               <div>
                 <span className="font-medium">Loading date: </span>
-                <span>{workbookData.generalInfo.loadingDate || "XXX"}</span>
+                <span>{adjustedWorkbookData.generalInfo.loadingDate || "XXX"}</span>
               </div>
               <div>
                 <span className="font-medium">Invoice Number: </span>
-                <span>{workbookData.generalInfo.invoiceNumber || "XXX"}</span>
+                <span>{adjustedWorkbookData.generalInfo.invoiceNumber || "XXX"}</span>
               </div>
               <div>
                 <span className="font-medium">Invoice Date: </span>
-                <span>{workbookData.generalInfo.invoiceDate || "XXX"}</span>
+                <span>{adjustedWorkbookData.generalInfo.invoiceDate || "XXX"}</span>
               </div>
             </div>
           </div>
@@ -193,7 +288,7 @@ export default function CreateListPage(): ReactElement {
                   </tr>
                 </thead>
                 <tbody>
-                  {workbookData.rows.map((row): ReactElement => (
+                  {adjustedWorkbookData.rows.map((row): ReactElement => (
                     <tr key={`${row.rowNumber}-${row.slabNoGross}-${row.slabNoNet}`} className="border-t" style={{ borderColor: "var(--border)" }}>
                       <td className="px-3 py-2">{row.slabNoGross || "-"}</td>
                       <td className="px-3 py-2">{row.lengthGross ?? "-"}</td>
@@ -210,20 +305,20 @@ export default function CreateListPage(): ReactElement {
                     <td className="px-3 py-2">-</td>
                     <td className="px-3 py-2">-</td>
                     <td className="px-3 py-2">
-                      {calculateTotalSquareMeter(workbookData.rows, (row) => row.lengthGross, (row) => row.widthGross)}
+                      {calculateTotalSquareMeter(adjustedWorkbookData.rows, (row) => row.lengthGross, (row) => row.widthGross)}
                     </td>
                     <td className="px-3 py-2">-</td>
                     <td className="px-3 py-2">-</td>
                     <td className="px-3 py-2">-</td>
                     <td className="px-3 py-2">
-                      {calculateTotalSquareMeter(workbookData.rows, (row) => row.lengthNet, (row) => row.widthNet)}
+                      {calculateTotalSquareMeter(adjustedWorkbookData.rows, (row) => row.lengthNet, (row) => row.widthNet)}
                     </td>
                   </tr>
                 </tbody>
               </table>
             </div>
             <div className="border-t px-3 py-2 text-sm" style={{ borderColor: "var(--border)" }}>
-              Tổng số dòng đọc được: {workbookData.rows.length}
+              Tổng số dòng đọc được: {adjustedWorkbookData.rows.length}
             </div>
           </div>
         </section>

@@ -8,6 +8,10 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  server: {
+    host: true,
+    allowedHosts: ['.ngrok-free.dev'],
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
