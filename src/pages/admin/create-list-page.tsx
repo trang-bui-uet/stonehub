@@ -169,7 +169,7 @@ export default function CreateListPage(): ReactElement {
       <div className="space-y-2">
         <h1 className="text-2xl font-semibold">Tạo List</h1>
         <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
-          Chọn nhà cung cấp, tải file Excel và hệ thống sẽ đọc dữ liệu theo cấu hình tương ứng.
+          Cách dùng: Chọn nhà cung cấp, chọn file Excel (.xlsx/.xls), điều chỉnh kích thước (+/- cm) nếu cần, sau đó bấm Tạo List để tải file kết quả.
         </p>
       </div>
       <section className="space-y-4 rounded-xl border p-3 sm:p-4" style={{ borderColor: "var(--border)" }}>
