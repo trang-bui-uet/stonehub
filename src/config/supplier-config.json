@@ -1,0 +1,137 @@
+{
+  "suppliers": [
+    {
+      "name": "AJ",
+      "workbook": {
+        "sheetName": "SHEET 1",
+        "headerRowIndex": 8,
+        "firstDataRowIndex": 9,
+        "stopKeywords": ["TOTAL", "GROSS MEASUREMENT", "NET MEASUREMENT"],
+        "stopIfEmpty": true
+      },
+      "columnMapping": {
+        "slabNoGross": "A",
+        "lengthGross": "B",
+        "widthGross": "C",
+        "slabNoNet": "F",
+        "lengthNet": "G",
+        "widthNet": "H"
+      },
+      "generalInfoMapping": {
+        "containerNumber": "A3:B3",
+        "materialName": null,
+        "numberOfSlabs": "G5:I5",
+        "loadingDate": "C5:D5",
+        "invoiceNumber": "E3:F3",
+        "invoiceDate": null
+      }
+    },
+    {
+      "name": "AGM",
+      "workbook": {
+        "sheetName": "Sheet1",
+        "headerRowIndex": 8,
+        "firstDataRowIndex": 9,
+        "stopKeywords": ["TOTAL", "GROSS MEASUREMENT", "NET MEASUREMENT"],
+        "stopIfEmpty": true
+      },
+      "columnMapping": {
+        "slabNoGross": "A",
+        "lengthGross": "B",
+        "widthGross": "C",
+        "slabNoNet": "E",
+        "lengthNet": "F",
+        "widthNet": "G"
+      },
+      "generalInfoMapping": {
+        "containerNumber": "D1:G1",
+        "materialName": "B3:F3",
+        "numberOfSlabs": null,
+        "loadingDate": "C5:E5",
+        "invoiceNumber": null,
+        "invoiceDate": null
+      }
+    },
+    {
+      "name": "AN",
+      "workbook": {
+        "sheetName": "PL",
+        "headerRowIndex": 11,
+        "firstDataRowIndex": 12,
+        "stopKeywords": ["TOTAL", "Total"],
+        "stopIfEmpty": true
+      },
+      "columnMapping": {
+        "slabNoGross": "B",
+        "lengthGross": "C",
+        "widthGross": "D",
+        "slabNoNet": "B",
+        "lengthNet": "F",
+        "widthNet": "G"
+      },
+      "generalInfoMapping": {
+        "containerNumber": "E9",
+        "materialName": "E3",
+        "typeOfPolish": "E4",
+        "numberOfSlabs": "E5",
+        "loadingDate": "E6",
+        "invoiceNumber": "E7",
+        "invoiceDate": "E8"
+      }
+    },
+    {
+      "name": "AY",
+      "workbook": {
+        "sheetName": "Sheet1",
+        "headerRowIndex": 8,
+        "firstDataRowIndex": 9,
+        "stopKeywords": ["Total Measurement", "Total Measurement"],
+        "stopIfEmpty": true
+      },
+      "columnMapping": {
+        "slabNoGross": "B",
+        "lengthGross": "C",
+        "widthGross": "D",
+        "slabNoNet": "B",
+        "lengthNet": "F",
+        "widthNet": "G"
+      },
+      "generalInfoMapping": {
+        "containerNumber": "H6",
+        "materialName": "B2:H2",
+        "typeOfPolish": "C4:D4",
+        "numberOfSlabs": "E4",
+        "loadingDate": null,
+        "invoiceNumber": "B6",
+        "invoiceDate": null
+      }
+    },
+    {
+      "name": "VK",
+      "workbook": {
+        "sheetName": "Sheet1",
+        "headerRowIndex": 4,
+        "firstDataRowIndex": 5,
+        "stopKeywords": ["TOTAL", "Total"],
+        "stopIfEmpty": true
+      },
+      "columnMapping": {
+        "slabNoGross": "A",
+        "lengthGross": "B",
+        "widthGross": "D",
+        "slabNoNet": "G",
+        "lengthNet": "H",
+        "widthNet": "J"
+      },
+      "generalInfoMapping": {
+        "containerNumber": null,
+        "materialName": null,
+        "typeOfPolish": null,
+        "numberOfSlabs": null,
+        "loadingDate": null,
+        "invoiceNumber": null,
+        "invoiceDate": null
+      }
+    }
+  ]
+}

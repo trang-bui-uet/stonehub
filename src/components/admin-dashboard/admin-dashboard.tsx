@@ -1,4 +1,4 @@
-import { List, LayoutGrid } from "lucide-react"
+import { LayoutGrid, FileSpreadsheet } from "lucide-react"
 import type { ComponentType, ReactElement } from "react"
 import { useMemo } from "react"
 import { NavLink, Outlet, useLocation } from "react-router-dom"
@@ -13,7 +13,7 @@ type SidebarNavItem = Readonly<{
 }>
 
 const SIDEBAR_NAV_ITEMS: SidebarNavItem[] = [
-  { key: "create-list", label: "Tạo List", icon: List, to: "/admin/create-list" },
+  { key: "create-list", label: "Tạo List", icon: FileSpreadsheet, to: "/admin/create-list" },
   { key: "menu-b", label: "Menu B", icon: LayoutGrid, to: "/admin/menu-b" }
 ]
 

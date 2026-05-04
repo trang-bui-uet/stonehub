@@ -1,0 +1,44 @@
+{
+  "sheetIndex": 0,
+  "dataStartRowIndex": 12,
+  "generalInfoMapping": {
+    "container#": "E2",
+    "materialName": "E3",
+    "typeOfPolish": "E4",
+    "numberOfSlabs": "E5",
+    "loadingDate": "E6",
+    "invoiceNumber": "E7",
+    "invoiceDate": "E8",
+    "containerNumber": "E9"
+  },
+  "columnMapping": {
+    "slabNoGross": "B",
+    "lengthGross": "C",
+    "widthGross": "D",
+    "grossSquareMeter": "E",
+    "lengthNet": "F",
+    "widthNet": "G",
+    "netSquareMeter": "H",
+    "freshOrVariation": "I"
+  },
+  "summaryMapping": {
+    "fresh": {
+      "numberOfSlabs": "L3",
+      "grossSquareMeter": "M3",
+      "netSquareMeter": "N3",
+      "percentage": "O3"
+    },
+    "lineVariation": {
+      "numberOfSlabs": "L4",
+      "grossSquareMeter": "M4",
+      "netSquareMeter": "N4",
+      "percentage": "O4"
+    },
+    "total": {
+      "numberOfSlabs": "L5",
+      "grossSquareMeter": "M5",
+      "netSquareMeter": "N5",
+      "percentage": "O5"
+    }
+  }
+}
