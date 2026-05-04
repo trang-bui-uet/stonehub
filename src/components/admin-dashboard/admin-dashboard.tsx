@@ -1,6 +1,6 @@
-import { LayoutGrid, FileSpreadsheet } from "lucide-react"
+import { LayoutGrid, FileSpreadsheet, Menu, X } from "lucide-react"
 import type { ComponentType, ReactElement } from "react"
-import { useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { NavLink, Outlet, useLocation } from "react-router-dom"
 
 type SidebarNavKey = "create-list" | "menu-b"
@@ -23,21 +23,43 @@ const SIDEBAR_NAV_ITEMS: SidebarNavItem[] = [
  */
 export default function AdminDashboard(): ReactElement {
   const location = useLocation()
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false)
 
   const activeTitle = useMemo((): string => {
     const normalizedPath = location.pathname.endsWith("/") ? location.pathname.slice(0, -1) : location.pathname
     const activeItem = SIDEBAR_NAV_ITEMS.find((item: SidebarNavItem): boolean => item.to === normalizedPath)
     return activeItem?.label ?? "Admin"
   }, [location.pathname])
+  useEffect((): void => {
+    setIsMobileMenuOpen(false)
+  }, [location.pathname])
 
   return (
     <div className="min-h-screen flex" style={{ backgroundColor: "var(--background)", color: "var(--foreground)" }}>
+      {isMobileMenuOpen ? (
+        <button
+          type="button"
+          className="fixed inset-0 z-40 bg-black/30 md:hidden"
+          aria-label="Đóng menu"
+          onClick={(): void => setIsMobileMenuOpen(false)}
+        />
+      ) : null}
       <aside
-        className="w-72 shrink-0 border-r"
+        className={`fixed inset-y-0 left-0 z-50 w-72 shrink-0 border-r transition-transform md:static md:translate-x-0 ${
+          isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
         style={{ borderColor: "var(--sidebar-border)", backgroundColor: "var(--sidebar)", color: "var(--sidebar-foreground)" }}
       >
         <div className="h-16 flex items-center px-4" style={{ borderBottom: "1px solid var(--sidebar-border)" }}>
           <div className="font-semibold">Thiên Phúc Stone</div>
+          <button
+            type="button"
+            className="ml-auto rounded-md p-2 md:hidden"
+            aria-label="Đóng menu"
+            onClick={(): void => setIsMobileMenuOpen(false)}
+          >
+            <X size={18} />
+          </button>
         </div>
 
         <nav className="p-2 space-y-1" aria-label="Quản lý">
@@ -62,16 +84,27 @@ export default function AdminDashboard(): ReactElement {
 
       <div className="flex-1 flex flex-col">
         <header
-          className="h-16 flex items-center justify-between px-6 border-b"
+          className="h-16 flex items-center justify-between px-4 border-b sm:px-6"
           style={{ borderBottomColor: "var(--border)" }}
         >
-          <h1 className="text-lg font-semibold">{activeTitle}</h1>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              className="rounded-md border p-2 md:hidden"
+              style={{ borderColor: "var(--border)" }}
+              aria-label="Mở menu"
+              onClick={(): void => setIsMobileMenuOpen(true)}
+            >
+              <Menu size={18} />
+            </button>
+            <h1 className="text-lg font-semibold">{activeTitle}</h1>
+          </div>
           <div className="text-sm" style={{ color: "var(--muted-foreground)" }}>
-            Dashboard đơn giản
+            <span className="hidden sm:inline">Dashboard đơn giản</span>
           </div>
         </header>
 
-        <main className="flex-1 p-6">
+        <main className="flex-1 p-3 sm:p-6">
           <Outlet />
         </main>
       </div>

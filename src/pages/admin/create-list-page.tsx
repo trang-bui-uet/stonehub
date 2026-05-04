@@ -19,6 +19,12 @@ type SupplierWorkbookData = Awaited<ReturnType<typeof readSupplierWorkbookFromFi
 const SUPPLIER_CONFIG: SupplierConfigRoot = supplierConfigJson as SupplierConfigRoot
 const CENTIMETER_SQUARE_TO_METER_SQUARE = 10_000
 const DEFAULT_DIMENSION_ADJUSTMENT_INPUT = "0"
+const EXCEL_FILE_ACCEPT = ".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+const EXCEL_FILE_MIME_TYPES = [
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-excel",
+] as const
+const EXCEL_FILE_EXTENSIONS = [".xlsx", ".xls"] as const
 
 function calculateSquareMeter(length: number | null, width: number | null): number | null {
   if (length === null || width === null) {
@@ -44,6 +50,15 @@ function getAdjustedDimension(value: number | null, adjustmentInCentimeter: numb
     return null
   }
   return value + adjustmentInCentimeter
+}
+
+function isExcelFile(file: File): boolean {
+  const fileName = file.name.toLowerCase()
+  const hasExcelExtension = EXCEL_FILE_EXTENSIONS.some((extension: string): boolean => fileName.endsWith(extension))
+  if (hasExcelExtension) {
+    return true
+  }
+  return EXCEL_FILE_MIME_TYPES.includes(file.type as (typeof EXCEL_FILE_MIME_TYPES)[number])
 }
 
 export default function CreateListPage(): ReactElement {
@@ -113,6 +128,11 @@ export default function CreateListPage(): ReactElement {
       event.target.value = ""
       return
     }
+    if (!isExcelFile(inputFile)) {
+      setErrorMessage("Chỉ chấp nhận file Excel (.xlsx, .xls).")
+      event.target.value = ""
+      return
+    }
     setIsReadingFile(true)
     setErrorMessage("")
     setWorkbookData(null)
@@ -145,14 +165,14 @@ export default function CreateListPage(): ReactElement {
     }
   }
   return (
-    <div className="max-w-6xl space-y-6">
+    <div className="max-w-6xl space-y-6 px-3 pb-6 sm:px-4">
       <div className="space-y-2">
         <h1 className="text-2xl font-semibold">Tạo List</h1>
         <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
           Chọn nhà cung cấp, tải file Excel và hệ thống sẽ đọc dữ liệu theo cấu hình tương ứng.
         </p>
       </div>
-      <section className="rounded-xl border p-4 space-y-4" style={{ borderColor: "var(--border)" }}>
+      <section className="space-y-4 rounded-xl border p-3 sm:p-4" style={{ borderColor: "var(--border)" }}>
         <div className="grid gap-4 md:grid-cols-2">
           <label className="space-y-2">
             <span className="text-sm font-medium">Nhà cung cấp</span>
@@ -175,7 +195,7 @@ export default function CreateListPage(): ReactElement {
               className="w-full rounded-md border px-3 py-2 text-sm file:mr-4 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-2 file:text-sm file:text-white"
               style={{ borderColor: "var(--input)" }}
               type="file"
-              accept=".xlsx,.xls"
+              accept={EXCEL_FILE_ACCEPT}
               onChange={handleUploadFile}
               disabled={isReadingFile}
             />
@@ -186,9 +206,9 @@ export default function CreateListPage(): ReactElement {
           <p className="rounded-md border border-red-400 bg-red-50 px-3 py-2 text-sm text-red-700">{errorMessage}</p>
         ) : null}
         <div className="space-y-2">
-          <label className="space-y-1 block">
+          <label className="block space-y-1">
             <span className="text-sm font-medium">Điều chỉnh kích thước (+/- cm)</span>
-            <div className="flex items-center gap-2">
+            <div className="flex max-w-xs items-center gap-2">
               <Button
                 type="button"
                 size="icon-sm"
@@ -200,7 +220,7 @@ export default function CreateListPage(): ReactElement {
                 <Minus />
               </Button>
               <input
-                className="w-24 rounded-md border px-3 py-2 text-sm"
+                className="w-20 rounded-md border px-2 py-2 text-center text-sm sm:w-24 sm:px-3"
                 style={{ borderColor: "var(--input)", backgroundColor: "var(--background)" }}
                 type="number"
                 step="1"
@@ -224,7 +244,7 @@ export default function CreateListPage(): ReactElement {
         </div>
         <div className="flex justify-end">
           <button
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
             type="button"
             onClick={handleCreateList}
             disabled={!workbookData || isCreatingList || isReadingFile}
@@ -235,7 +255,7 @@ export default function CreateListPage(): ReactElement {
       </section>
       {adjustedWorkbookData ? (
         <section className="space-y-4">
-          <div className="rounded-xl border p-4" style={{ borderColor: "var(--border)" }}>
+          <div className="rounded-xl border p-3 sm:p-4" style={{ borderColor: "var(--border)" }}>
             <h2 className="text-base font-semibold">Thông tin chung</h2>
             <div className="mt-3 grid gap-3 text-sm md:grid-cols-2">
               <div>
@@ -273,7 +293,57 @@ export default function CreateListPage(): ReactElement {
             </div>
           </div>
           <div className="rounded-xl border" style={{ borderColor: "var(--border)" }}>
-            <div className="overflow-x-auto">
+            <div className="space-y-3 p-3 md:hidden">
+              {adjustedWorkbookData.rows.map((row): ReactElement => (
+                <div key={`${row.rowNumber}-${row.slabNoGross}-${row.slabNoNet}`} className="rounded-lg border p-3 text-sm" style={{ borderColor: "var(--border)" }}>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="font-medium">Slab Gross: </span>
+                      <span>{row.slabNoGross || "-"}</span>
+                    </div>
+                    <div>
+                      <span className="font-medium">Slab Net: </span>
+                      <span>{row.slabNoNet || "-"}</span>
+                    </div>
+                    <div>
+                      <span className="font-medium">L Gross: </span>
+                      <span>{row.lengthGross ?? "-"}</span>
+                    </div>
+                    <div>
+                      <span className="font-medium">W Gross: </span>
+                      <span>{row.widthGross ?? "-"}</span>
+                    </div>
+                    <div>
+                      <span className="font-medium">L Net: </span>
+                      <span>{row.lengthNet ?? "-"}</span>
+                    </div>
+                    <div>
+                      <span className="font-medium">W Net: </span>
+                      <span>{row.widthNet ?? "-"}</span>
+                    </div>
+                    <div>
+                      <span className="font-medium">GROSS SQM: </span>
+                      <span>{calculateSquareMeter(row.lengthGross, row.widthGross) ?? "-"}</span>
+                    </div>
+                    <div>
+                      <span className="font-medium">NET SQM: </span>
+                      <span>{calculateSquareMeter(row.lengthNet, row.widthNet) ?? "-"}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <div className="rounded-lg border p-3 text-sm font-semibold" style={{ borderColor: "var(--border)" }}>
+                <div className="flex items-center justify-between">
+                  <span>Tổng GROSS SQM</span>
+                  <span>{calculateTotalSquareMeter(adjustedWorkbookData.rows, (row) => row.lengthGross, (row) => row.widthGross)}</span>
+                </div>
+                <div className="mt-2 flex items-center justify-between">
+                  <span>Tổng NET SQM</span>
+                  <span>{calculateTotalSquareMeter(adjustedWorkbookData.rows, (row) => row.lengthNet, (row) => row.widthNet)}</span>
+                </div>
+              </div>
+            </div>
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full text-sm">
                 <thead style={{ backgroundColor: "var(--muted)" }}>
                   <tr className="text-left">
