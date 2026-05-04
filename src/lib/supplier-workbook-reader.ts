@@ -72,6 +72,9 @@ type ReadSupplierWorkbookResult = Readonly<{
 }>
 
 const SUPPLIER_CONFIG: SupplierConfigRoot = supplierConfigJson as SupplierConfigRoot
+const EXCEL_DATE_MIN_SERIAL = 20_000
+const EXCEL_DATE_MAX_SERIAL = 80_000
+const EXCEL_DATE_EPOCH_UTC = Date.UTC(1899, 11, 30)
 
 function getSupplierConfigByName(supplierName: string): SupplierConfig {
   const supplierConfig = SUPPLIER_CONFIG.suppliers.find((supplier: SupplierConfig): boolean => supplier.name === supplierName)
@@ -119,6 +122,29 @@ function getRangeValueAsString(sheet: XLSX.WorkSheet, rangeAddress: string | nul
     }
   }
   return collectedValues.join(" ").trim()
+}
+
+function formatDateToDisplayText(dateValue: Date): string {
+  const day = String(dateValue.getUTCDate()).padStart(2, "0")
+  const month = String(dateValue.getUTCMonth() + 1).padStart(2, "0")
+  const year = dateValue.getUTCFullYear()
+  return `${day}/${month}/${year}`
+}
+
+function normalizeExcelDateValue(value: string): string {
+  const normalizedValue = value.trim()
+  if (!normalizedValue) {
+    return ""
+  }
+  const serialValue = Number(normalizedValue)
+  if (!Number.isFinite(serialValue) || !Number.isInteger(serialValue)) {
+    return normalizedValue
+  }
+  if (serialValue < EXCEL_DATE_MIN_SERIAL || serialValue > EXCEL_DATE_MAX_SERIAL) {
+    return normalizedValue
+  }
+  const dateValue = new Date(EXCEL_DATE_EPOCH_UTC + serialValue * 24 * 60 * 60 * 1000)
+  return formatDateToDisplayText(dateValue)
 }
 
 function hasStopKeyword(rowValues: readonly string[], stopKeywords: readonly string[]): boolean {
@@ -188,9 +214,9 @@ function parseGeneralInfo(
     materialName: getRangeValueAsString(sheet, supplierConfig.generalInfoMapping.materialName),
     typeOfPolish: getRangeValueAsString(sheet, supplierConfig.generalInfoMapping.typeOfPolish),
     numberOfSlabs: resolvedNumberOfSlabs,
-    loadingDate: getRangeValueAsString(sheet, supplierConfig.generalInfoMapping.loadingDate),
+    loadingDate: normalizeExcelDateValue(getRangeValueAsString(sheet, supplierConfig.generalInfoMapping.loadingDate)),
     invoiceNumber: getRangeValueAsString(sheet, supplierConfig.generalInfoMapping.invoiceNumber),
-    invoiceDate: getRangeValueAsString(sheet, supplierConfig.generalInfoMapping.invoiceDate),
+    invoiceDate: normalizeExcelDateValue(getRangeValueAsString(sheet, supplierConfig.generalInfoMapping.invoiceDate)),
   }
 }
 
