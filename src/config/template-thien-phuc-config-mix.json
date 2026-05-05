@@ -1,0 +1,41 @@
+{
+  "sheetIndex": 0,
+  "sections": [
+    {
+      "name": "mix1",
+      "dataStartRowIndex": 4,
+      "generalInfoMapping": {
+        "materialName": "A1:H1"
+      },
+      "columnMapping": {
+        "slabNoGross": "A",
+        "lengthGross": "B",
+        "widthGross": "C",
+        "grossSquareMeter": "D",
+        "slabNoNet": "E",
+        "lengthNet": "F",
+        "widthNet": "G",
+        "netSquareMeter": "H",
+        "freshVar": "I"
+      }
+    },
+    {
+      "name": "mix2",
+      "dataStartRowIndex": 10,
+      "generalInfoMapping": {
+        "materialName": "A7:H7"
+      },
+      "columnMapping": {
+        "slabNoGross": "A",
+        "lengthGross": "B",
+        "widthGross": "C",
+        "grossSquareMeter": "D",
+        "slabNoNet": "E",
+        "lengthNet": "F",
+        "widthNet": "G",
+        "netSquareMeter": "H",
+        "freshVar": "I"
+      }
+    }
+  ]
+}

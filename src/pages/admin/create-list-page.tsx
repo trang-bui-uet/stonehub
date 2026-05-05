@@ -1,6 +1,8 @@
 import supplierConfigJson from "@/config/supplier-config.json"
 import { Button } from "@/components/ui/button"
+import { readAnMixWorkbookFromFile } from "@/lib/an-mix-workbook-reader"
 import { readSupplierWorkbookFromFile } from "@/lib/supplier-workbook-reader"
+import { exportTemplateMixFile } from "@/lib/template-mix-exporter"
 import { exportSupplierListFile } from "@/lib/template-list-exporter"
 import { Minus, Plus } from "lucide-react"
 import type { ChangeEvent, ReactElement } from "react"
@@ -14,9 +16,15 @@ type SupplierConfigRoot = Readonly<{
   suppliers: readonly SupplierConfigItem[]
 }>
 
-type SupplierWorkbookData = Awaited<ReturnType<typeof readSupplierWorkbookFromFile>>
+type StandardSupplierWorkbookData = Awaited<ReturnType<typeof readSupplierWorkbookFromFile>>
+type AnMixSupplierWorkbookData = Awaited<ReturnType<typeof readAnMixWorkbookFromFile>>
+type SupplierWorkbookData = StandardSupplierWorkbookData | AnMixSupplierWorkbookData
+type SupplierSlabRow = StandardSupplierWorkbookData["rows"][number]
+type SupplierGeneralInfo = StandardSupplierWorkbookData["generalInfo"]
+type AnMixSectionData = AnMixSupplierWorkbookData["sections"][number]
 
 const SUPPLIER_CONFIG: SupplierConfigRoot = supplierConfigJson as SupplierConfigRoot
+const AN_MIX_SUPPLIER_NAME = "AN (mix)"
 const CENTIMETER_SQUARE_TO_METER_SQUARE = 10_000
 const DEFAULT_DIMENSION_ADJUSTMENT_INPUT = "0"
 const EXCEL_FILE_ACCEPT = ".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
@@ -34,11 +42,11 @@ function calculateSquareMeter(length: number | null, width: number | null): numb
 }
 
 function calculateTotalSquareMeter(
-  rows: SupplierWorkbookData["rows"],
-  getLength: (row: SupplierWorkbookData["rows"][number]) => number | null,
-  getWidth: (row: SupplierWorkbookData["rows"][number]) => number | null,
+  rows: readonly SupplierSlabRow[],
+  getLength: (row: SupplierSlabRow) => number | null,
+  getWidth: (row: SupplierSlabRow) => number | null,
 ): number {
-  const totalValue = rows.reduce((sum: number, row: SupplierWorkbookData["rows"][number]): number => {
+  const totalValue = rows.reduce((sum: number, row: SupplierSlabRow): number => {
     const squareMeter = calculateSquareMeter(getLength(row), getWidth(row))
     return sum + (squareMeter ?? 0)
   }, 0)
@@ -59,6 +67,157 @@ function isExcelFile(file: File): boolean {
     return true
   }
   return EXCEL_FILE_MIME_TYPES.includes(file.type as (typeof EXCEL_FILE_MIME_TYPES)[number])
+}
+
+function isAnMixWorkbookData(workbookData: SupplierWorkbookData): workbookData is AnMixSupplierWorkbookData {
+  return "sections" in workbookData
+}
+
+function getAdjustedRows(rows: readonly SupplierSlabRow[], adjustmentInCentimeter: number): readonly SupplierSlabRow[] {
+  return rows.map((row: SupplierSlabRow): SupplierSlabRow => ({
+    ...row,
+    lengthGross: getAdjustedDimension(row.lengthGross, adjustmentInCentimeter),
+    widthGross: getAdjustedDimension(row.widthGross, adjustmentInCentimeter),
+    lengthNet: getAdjustedDimension(row.lengthNet, adjustmentInCentimeter),
+    widthNet: getAdjustedDimension(row.widthNet, adjustmentInCentimeter),
+  }))
+}
+
+function renderRowTable(rows: readonly SupplierSlabRow[]): ReactElement {
+  return (
+    <div className="rounded-xl border" style={{ borderColor: "var(--border)" }}>
+      <div className="hidden overflow-x-auto md:block">
+        <table className="w-full text-sm">
+          <thead style={{ backgroundColor: "var(--muted)" }}>
+            <tr className="text-left">
+              <th className="px-3 py-2">Slab Gross</th>
+              <th className="px-3 py-2">L Gross</th>
+              <th className="px-3 py-2">W Gross</th>
+              <th className="px-3 py-2">GROSS SQM</th>
+              <th className="px-3 py-2">Slab Net</th>
+              <th className="px-3 py-2">L Net</th>
+              <th className="px-3 py-2">W Net</th>
+              <th className="px-3 py-2">NET SQM</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row: SupplierSlabRow): ReactElement => (
+              <tr key={`${row.rowNumber}-${row.slabNoGross}-${row.slabNoNet}`} className="border-t" style={{ borderColor: "var(--border)" }}>
+                <td className="px-3 py-2">{row.slabNoGross || "-"}</td>
+                <td className="px-3 py-2">{row.lengthGross ?? "-"}</td>
+                <td className="px-3 py-2">{row.widthGross ?? "-"}</td>
+                <td className="px-3 py-2">{calculateSquareMeter(row.lengthGross, row.widthGross) ?? "-"}</td>
+                <td className="px-3 py-2">{row.slabNoNet || "-"}</td>
+                <td className="px-3 py-2">{row.lengthNet ?? "-"}</td>
+                <td className="px-3 py-2">{row.widthNet ?? "-"}</td>
+                <td className="px-3 py-2">{calculateSquareMeter(row.lengthNet, row.widthNet) ?? "-"}</td>
+              </tr>
+            ))}
+            <tr className="border-t font-semibold" style={{ borderColor: "var(--border)" }}>
+              <td className="px-3 py-2">Total</td>
+              <td className="px-3 py-2">-</td>
+              <td className="px-3 py-2">-</td>
+              <td className="px-3 py-2">{calculateTotalSquareMeter(rows, (row: SupplierSlabRow): number | null => row.lengthGross, (row: SupplierSlabRow): number | null => row.widthGross)}</td>
+              <td className="px-3 py-2">-</td>
+              <td className="px-3 py-2">-</td>
+              <td className="px-3 py-2">-</td>
+              <td className="px-3 py-2">{calculateTotalSquareMeter(rows, (row: SupplierSlabRow): number | null => row.lengthNet, (row: SupplierSlabRow): number | null => row.widthNet)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div className="space-y-3 p-3 md:hidden">
+        {rows.map((row: SupplierSlabRow): ReactElement => (
+          <div key={`${row.rowNumber}-${row.slabNoGross}-${row.slabNoNet}`} className="rounded-lg border p-3 text-sm" style={{ borderColor: "var(--border)" }}>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <span className="font-medium">Slab Gross: </span>
+                <span>{row.slabNoGross || "-"}</span>
+              </div>
+              <div>
+                <span className="font-medium">Slab Net: </span>
+                <span>{row.slabNoNet || "-"}</span>
+              </div>
+              <div>
+                <span className="font-medium">L Gross: </span>
+                <span>{row.lengthGross ?? "-"}</span>
+              </div>
+              <div>
+                <span className="font-medium">W Gross: </span>
+                <span>{row.widthGross ?? "-"}</span>
+              </div>
+              <div>
+                <span className="font-medium">L Net: </span>
+                <span>{row.lengthNet ?? "-"}</span>
+              </div>
+              <div>
+                <span className="font-medium">W Net: </span>
+                <span>{row.widthNet ?? "-"}</span>
+              </div>
+              <div>
+                <span className="font-medium">GROSS SQM: </span>
+                <span>{calculateSquareMeter(row.lengthGross, row.widthGross) ?? "-"}</span>
+              </div>
+              <div>
+                <span className="font-medium">NET SQM: </span>
+                <span>{calculateSquareMeter(row.lengthNet, row.widthNet) ?? "-"}</span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="border-t px-3 py-2 text-sm" style={{ borderColor: "var(--border)" }}>
+        Tổng số dòng đọc được: {rows.length}
+      </div>
+    </div>
+  )
+}
+
+function renderGeneralInfoCard(
+  supplierName: string,
+  generalInfo: SupplierGeneralInfo,
+  numberOfRows: number,
+  title: string,
+): ReactElement {
+  return (
+    <div className="rounded-xl border p-3 sm:p-4" style={{ borderColor: "var(--border)" }}>
+      <h2 className="text-base font-semibold">{title}</h2>
+      <div className="mt-3 grid gap-3 text-sm md:grid-cols-2">
+        <div>
+          <span className="font-medium">Nhà cung cấp: </span>
+          <span>{supplierName || "XXX"}</span>
+        </div>
+        <div>
+          <span className="font-medium">Container Number: </span>
+          <span>{generalInfo.containerNumber || "XXX"}</span>
+        </div>
+        <div>
+          <span className="font-medium">Material: </span>
+          <span>{generalInfo.materialName || "XXX"}</span>
+        </div>
+        <div>
+          <span className="font-medium">Type of polish: </span>
+          <span>{generalInfo.typeOfPolish || "XXX"}</span>
+        </div>
+        <div>
+          <span className="font-medium">Số lượng slabs: </span>
+          <span>{numberOfRows || "XXX"}</span>
+        </div>
+        <div>
+          <span className="font-medium">Loading date: </span>
+          <span>{generalInfo.loadingDate || "XXX"}</span>
+        </div>
+        <div>
+          <span className="font-medium">Invoice Number: </span>
+          <span>{generalInfo.invoiceNumber || "XXX"}</span>
+        </div>
+        <div>
+          <span className="font-medium">Invoice Date: </span>
+          <span>{generalInfo.invoiceDate || "XXX"}</span>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export default function CreateListPage(): ReactElement {
@@ -89,17 +248,16 @@ export default function CreateListPage(): ReactElement {
     if (!workbookData) {
       return null
     }
-    const adjustedRows = workbookData.rows.map((row: SupplierWorkbookData["rows"][number]) => ({
-      ...row,
-      lengthGross: getAdjustedDimension(row.lengthGross, dimensionAdjustmentInCentimeter),
-      widthGross: getAdjustedDimension(row.widthGross, dimensionAdjustmentInCentimeter),
-      lengthNet: getAdjustedDimension(row.lengthNet, dimensionAdjustmentInCentimeter),
-      widthNet: getAdjustedDimension(row.widthNet, dimensionAdjustmentInCentimeter),
-    }))
-    return {
-      ...workbookData,
-      rows: adjustedRows,
+    if (isAnMixWorkbookData(workbookData)) {
+      return {
+        ...workbookData,
+        sections: workbookData.sections.map((section: AnMixSectionData): AnMixSectionData => ({
+          ...section,
+          rows: getAdjustedRows(section.rows, dimensionAdjustmentInCentimeter),
+        })),
+      }
     }
+    return { ...workbookData, rows: getAdjustedRows(workbookData.rows, dimensionAdjustmentInCentimeter) }
   }, [dimensionAdjustmentInCentimeter, workbookData])
   function handleDimensionAdjustmentChange(value: string): void {
     if (value.trim() === "") {
@@ -138,7 +296,10 @@ export default function CreateListPage(): ReactElement {
     setWorkbookData(null)
     setDimensionAdjustmentInput(DEFAULT_DIMENSION_ADJUSTMENT_INPUT)
     try {
-      const parsedWorkbookData = await readSupplierWorkbookFromFile({ file: inputFile, supplierName: selectedSupplierName })
+      const parsedWorkbookData =
+        selectedSupplierName === AN_MIX_SUPPLIER_NAME
+          ? await readAnMixWorkbookFromFile({ file: inputFile, supplierName: selectedSupplierName })
+          : await readSupplierWorkbookFromFile({ file: inputFile, supplierName: selectedSupplierName })
       setWorkbookData(parsedWorkbookData)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Không thể đọc file Excel."
@@ -156,7 +317,11 @@ export default function CreateListPage(): ReactElement {
     setErrorMessage("")
     setIsCreatingList(true)
     try {
-      await exportSupplierListFile(adjustedWorkbookData)
+      if (isAnMixWorkbookData(adjustedWorkbookData)) {
+        await exportTemplateMixFile(adjustedWorkbookData)
+      } else {
+        await exportSupplierListFile(adjustedWorkbookData)
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Không thể tạo file list."
       setErrorMessage(message)
@@ -255,142 +420,29 @@ export default function CreateListPage(): ReactElement {
       </section>
       {adjustedWorkbookData ? (
         <section className="space-y-4">
-          <div className="rounded-xl border p-3 sm:p-4" style={{ borderColor: "var(--border)" }}>
-            <h2 className="text-base font-semibold">Thông tin chung</h2>
-            <div className="mt-3 grid gap-3 text-sm md:grid-cols-2">
-              <div>
-                <span className="font-medium">Nhà cung cấp: </span>
-                <span>{adjustedWorkbookData.supplierName || "XXX"}</span>
-              </div>
-              <div>
-                <span className="font-medium">Container Number: </span>
-                <span>{adjustedWorkbookData.generalInfo.containerNumber || "XXX"}</span>
-              </div>
-              <div>
-                <span className="font-medium">Material: </span>
-                <span>{adjustedWorkbookData.generalInfo.materialName || "XXX"}</span>
-              </div>
-              <div>
-                <span className="font-medium">Type of polish: </span>
-                <span>{adjustedWorkbookData.generalInfo.typeOfPolish || "XXX"}</span>
-              </div>
-              <div>
-                <span className="font-medium">Số lượng slabs: </span>
-                <span>{adjustedWorkbookData.rows.length || "XXX"}</span>
-              </div>
-              <div>
-                <span className="font-medium">Loading date: </span>
-                <span>{adjustedWorkbookData.generalInfo.loadingDate || "XXX"}</span>
-              </div>
-              <div>
-                <span className="font-medium">Invoice Number: </span>
-                <span>{adjustedWorkbookData.generalInfo.invoiceNumber || "XXX"}</span>
-              </div>
-              <div>
-                <span className="font-medium">Invoice Date: </span>
-                <span>{adjustedWorkbookData.generalInfo.invoiceDate || "XXX"}</span>
-              </div>
-            </div>
-          </div>
-          <div className="rounded-xl border" style={{ borderColor: "var(--border)" }}>
-            <div className="space-y-3 p-3 md:hidden">
-              {adjustedWorkbookData.rows.map((row): ReactElement => (
-                <div key={`${row.rowNumber}-${row.slabNoGross}-${row.slabNoNet}`} className="rounded-lg border p-3 text-sm" style={{ borderColor: "var(--border)" }}>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <span className="font-medium">Slab Gross: </span>
-                      <span>{row.slabNoGross || "-"}</span>
-                    </div>
-                    <div>
-                      <span className="font-medium">Slab Net: </span>
-                      <span>{row.slabNoNet || "-"}</span>
-                    </div>
-                    <div>
-                      <span className="font-medium">L Gross: </span>
-                      <span>{row.lengthGross ?? "-"}</span>
-                    </div>
-                    <div>
-                      <span className="font-medium">W Gross: </span>
-                      <span>{row.widthGross ?? "-"}</span>
-                    </div>
-                    <div>
-                      <span className="font-medium">L Net: </span>
-                      <span>{row.lengthNet ?? "-"}</span>
-                    </div>
-                    <div>
-                      <span className="font-medium">W Net: </span>
-                      <span>{row.widthNet ?? "-"}</span>
-                    </div>
-                    <div>
-                      <span className="font-medium">GROSS SQM: </span>
-                      <span>{calculateSquareMeter(row.lengthGross, row.widthGross) ?? "-"}</span>
-                    </div>
-                    <div>
-                      <span className="font-medium">NET SQM: </span>
-                      <span>{calculateSquareMeter(row.lengthNet, row.widthNet) ?? "-"}</span>
-                    </div>
-                  </div>
+          {isAnMixWorkbookData(adjustedWorkbookData)
+            ? adjustedWorkbookData.sections.map((section: AnMixSectionData): ReactElement => (
+                <div key={section.name} className="space-y-4">
+                  {renderGeneralInfoCard(
+                    adjustedWorkbookData.supplierName,
+                    section.generalInfo,
+                    section.rows.length,
+                    `Thông tin section ${section.name}`,
+                  )}
+                  {renderRowTable(section.rows)}
                 </div>
-              ))}
-              <div className="rounded-lg border p-3 text-sm font-semibold" style={{ borderColor: "var(--border)" }}>
-                <div className="flex items-center justify-between">
-                  <span>Tổng GROSS SQM</span>
-                  <span>{calculateTotalSquareMeter(adjustedWorkbookData.rows, (row) => row.lengthGross, (row) => row.widthGross)}</span>
-                </div>
-                <div className="mt-2 flex items-center justify-between">
-                  <span>Tổng NET SQM</span>
-                  <span>{calculateTotalSquareMeter(adjustedWorkbookData.rows, (row) => row.lengthNet, (row) => row.widthNet)}</span>
-                </div>
+              ))
+            : (
+              <div className="space-y-4">
+                {renderGeneralInfoCard(
+                  adjustedWorkbookData.supplierName,
+                  adjustedWorkbookData.generalInfo,
+                  adjustedWorkbookData.rows.length,
+                  "Thông tin chung",
+                )}
+                {renderRowTable(adjustedWorkbookData.rows)}
               </div>
-            </div>
-            <div className="hidden overflow-x-auto md:block">
-              <table className="w-full text-sm">
-                <thead style={{ backgroundColor: "var(--muted)" }}>
-                  <tr className="text-left">
-                    <th className="px-3 py-2">Slab Gross</th>
-                    <th className="px-3 py-2">L Gross</th>
-                    <th className="px-3 py-2">W Gross</th>
-                    <th className="px-3 py-2">GROSS SQM</th>
-                    <th className="px-3 py-2">Slab Net</th>
-                    <th className="px-3 py-2">L Net</th>
-                    <th className="px-3 py-2">W Net</th>
-                    <th className="px-3 py-2">NET SQM</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {adjustedWorkbookData.rows.map((row): ReactElement => (
-                    <tr key={`${row.rowNumber}-${row.slabNoGross}-${row.slabNoNet}`} className="border-t" style={{ borderColor: "var(--border)" }}>
-                      <td className="px-3 py-2">{row.slabNoGross || "-"}</td>
-                      <td className="px-3 py-2">{row.lengthGross ?? "-"}</td>
-                      <td className="px-3 py-2">{row.widthGross ?? "-"}</td>
-                      <td className="px-3 py-2">{calculateSquareMeter(row.lengthGross, row.widthGross) ?? "-"}</td>
-                      <td className="px-3 py-2">{row.slabNoNet || "-"}</td>
-                      <td className="px-3 py-2">{row.lengthNet ?? "-"}</td>
-                      <td className="px-3 py-2">{row.widthNet ?? "-"}</td>
-                      <td className="px-3 py-2">{calculateSquareMeter(row.lengthNet, row.widthNet) ?? "-"}</td>
-                    </tr>
-                  ))}
-                  <tr className="border-t font-semibold" style={{ borderColor: "var(--border)" }}>
-                    <td className="px-3 py-2">Total</td>
-                    <td className="px-3 py-2">-</td>
-                    <td className="px-3 py-2">-</td>
-                    <td className="px-3 py-2">
-                      {calculateTotalSquareMeter(adjustedWorkbookData.rows, (row) => row.lengthGross, (row) => row.widthGross)}
-                    </td>
-                    <td className="px-3 py-2">-</td>
-                    <td className="px-3 py-2">-</td>
-                    <td className="px-3 py-2">-</td>
-                    <td className="px-3 py-2">
-                      {calculateTotalSquareMeter(adjustedWorkbookData.rows, (row) => row.lengthNet, (row) => row.widthNet)}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <div className="border-t px-3 py-2 text-sm" style={{ borderColor: "var(--border)" }}>
-              Tổng số dòng đọc được: {adjustedWorkbookData.rows.length}
-            </div>
-          </div>
+            )}
         </section>
       ) : null}
     </div>

@@ -6,7 +6,11 @@
         "sheetName": "SHEET 1",
         "headerRowIndex": 8,
         "firstDataRowIndex": 9,
-        "stopKeywords": ["TOTAL", "GROSS MEASUREMENT", "NET MEASUREMENT"],
+        "stopKeywords": [
+          "TOTAL",
+          "GROSS MEASUREMENT",
+          "NET MEASUREMENT"
+        ],
         "stopIfEmpty": true
       },
       "columnMapping": {
@@ -33,7 +37,11 @@
         "sheetName": "Sheet1",
         "headerRowIndex": 8,
         "firstDataRowIndex": 9,
-        "stopKeywords": ["TOTAL", "GROSS MEASUREMENT", "NET MEASUREMENT"],
+        "stopKeywords": [
+          "TOTAL",
+          "GROSS MEASUREMENT",
+          "NET MEASUREMENT"
+        ],
         "stopIfEmpty": true
       },
       "columnMapping": {
@@ -60,7 +68,12 @@
         "sheetName": "PL",
         "headerRowIndex": 11,
         "firstDataRowIndex": 12,
-        "stopKeywords": ["TOTAL", "Total", "GROSS MEASUREMENT", "NET MEASUREMENT"],
+        "stopKeywords": [
+          "TOTAL",
+          "Total",
+          "GROSS MEASUREMENT",
+          "NET MEASUREMENT"
+        ],
         "stopIfEmpty": true
       },
       "columnMapping": {
@@ -83,12 +96,74 @@
       }
     },
     {
+      "name": "AN (mix)",
+      "workbook": {
+        "sheetName": "Sheet1",
+        "headerRowIndex": 11,
+        "firstDataRowIndex": 12,
+        "stopKeywords": [
+          "TOTAL",
+          "Total",
+          "GROSS MEASUREMENT",
+          "NET MEASUREMENT"
+        ],
+        "stopIfEmpty": true
+      },
+      "sections": [
+        {
+          "name": "mix1",
+          "columnMapping": {
+            "slabNoGross": "B",
+            "lengthGross": "C",
+            "widthGross": "D",
+            "slabNoNet": "B",
+            "lengthNet": "F",
+            "widthNet": "G",
+            "freshVar": "I"
+          },
+          "generalInfoMapping": {
+            "containerNumber": "E9",
+            "materialName": "E3",
+            "typeOfPolish": "E4",
+            "numberOfSlabs": "E5",
+            "loadingDate": "E6",
+            "invoiceNumber": "E7",
+            "invoiceDate": "E8"
+          }
+        },
+        {
+          "name": "mix2",
+          "columnMapping": {
+            "slabNoGross": "K",
+            "lengthGross": "L",
+            "widthGross": "M",
+            "slabNoNet": "K",
+            "lengthNet": "O",
+            "widthNet": "P",
+            "freshVar": "R"
+          },
+          "generalInfoMapping": {
+            "containerNumber": "N9",
+            "materialName": "N3",
+            "typeOfPolish": "N4",
+            "numberOfSlabs": "N5",
+            "loadingDate": "N6",
+            "invoiceNumber": "N7",
+            "invoiceDate": "N8"
+          }
+        }
+      ]
+    },
+    {
       "name": "AY",
       "workbook": {
         "sheetName": "Sheet1",
         "headerRowIndex": 8,
         "firstDataRowIndex": 9,
-        "stopKeywords": ["Total Measurement", "Total Measurement"],
+        "stopKeywords": [
+          "Total Measurement",
+          "Total Measurement"
+        ],
         "stopIfEmpty": true
       },
       "columnMapping": {
@@ -116,7 +191,10 @@
         "sheetName": "Sheet1",
         "headerRowIndex": 4,
         "firstDataRowIndex": 5,
-        "stopKeywords": ["TOTAL", "Total"],
+        "stopKeywords": [
+          "TOTAL",
+          "Total"
+        ],
         "stopIfEmpty": true
       },
       "columnMapping": {
@@ -144,7 +222,12 @@
         "sheetName": "Sheet1",
         "headerRowIndex": 3,
         "firstDataRowIndex": 4,
-        "stopKeywords": ["TOTAL", "Total", "GROSS TOTAL", "NET TOTAL"],
+        "stopKeywords": [
+          "TOTAL",
+          "Total",
+          "GROSS TOTAL",
+          "NET TOTAL"
+        ],
         "stopIfEmpty": true
       },
       "columnMapping": {
