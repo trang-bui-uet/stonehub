@@ -16,6 +16,7 @@ type TemplateColumnMapping = Readonly<{
   lengthNet: string
   widthNet: string
   netSquareMeter: string
+  freshVar: string
 }>
 type TemplateThienPhucConfig = Readonly<{
   sheetIndex: number
@@ -27,6 +28,7 @@ const CENTIMETER_SQUARE_TO_METER_SQUARE = 10_000
 const GROSS_MEASUREMENT_TEXT = "GROSS MEASUREMENT"
 const DEFAULT_MATERIAL_NAME_TEXT = "Material Name"
 const NET_MEASUREMENT_TEXT = "NET MEASUREMENT"
+const VAR_LABEL_TEXT = "V"
 const TEMPLATE_CONFIG: TemplateThienPhucConfig = templateConfigJson as TemplateThienPhucConfig
 
 function setCellValue(worksheet: ExcelJS.Worksheet, cellAddress: string, value: string | number): void {
@@ -73,6 +75,13 @@ function normalizeTextValue(value: string): string {
   return value.trim()
 }
 
+function formatCurrentDayMonthText(): string {
+  const currentDate = new Date()
+  const day = String(currentDate.getDate()).padStart(2, "0")
+  const month = String(currentDate.getMonth() + 1).padStart(2, "0")
+  return `${day}-${month}`
+}
+
 function setGeneralInfo(worksheet: ExcelJS.Worksheet, workbookData: SupplierWorkbookData): void {
   const resolvedMaterialName = normalizeTextValue(workbookData.generalInfo.materialName) || DEFAULT_MATERIAL_NAME_TEXT
   setCellValue(
@@ -111,6 +120,11 @@ function setRowData(
       `${TEMPLATE_CONFIG.columnMapping.netSquareMeter}${currentRowNumber}`,
       `=${TEMPLATE_CONFIG.columnMapping.lengthNet}${currentRowNumber}*${TEMPLATE_CONFIG.columnMapping.widthNet}${currentRowNumber}/${CENTIMETER_SQUARE_TO_METER_SQUARE}`,
       roundNumberToTwoDigits(netSquareMeter),
+    )
+    setCellValue(
+      worksheet,
+      `${TEMPLATE_CONFIG.columnMapping.freshVar}${currentRowNumber}`,
+      row.freshVar === "Var" ? VAR_LABEL_TEXT : "",
     )
   }
   return { nextRowNumber: TEMPLATE_CONFIG.dataStartRowIndex + workbookData.rows.length, grossTotalSquareMeter, netTotalSquareMeter }
@@ -154,10 +168,9 @@ function setTotalRow(
 }
 
 function buildOutputFileName(workbookData: SupplierWorkbookData): string {
-  const normalizedSupplierName = workbookData.supplierName.toLowerCase().replaceAll(" ", "-")
-  const normalizedContainerNumber = normalizeTextValue(workbookData.generalInfo.containerNumber).replaceAll(" ", "-")
-  const suffix = normalizedContainerNumber || "no-container"
-  return `list-${normalizedSupplierName}-${suffix}.xlsx`
+  const resolvedMaterialName = normalizeTextValue(workbookData.generalInfo.materialName) || DEFAULT_MATERIAL_NAME_TEXT
+  const dayMonthText = formatCurrentDayMonthText()
+  return `TP - ${resolvedMaterialName} ${dayMonthText}.xlsx`
 }
 
 /**

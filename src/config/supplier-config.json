@@ -15,7 +15,8 @@
         "widthGross": "C",
         "slabNoNet": "F",
         "lengthNet": "G",
-        "widthNet": "H"
+        "widthNet": "H",
+        "freshVar": null
       },
       "generalInfoMapping": {
         "containerNumber": "A3:B3",
@@ -41,7 +42,8 @@
         "widthGross": "C",
         "slabNoNet": "E",
         "lengthNet": "F",
-        "widthNet": "G"
+        "widthNet": "G",
+        "freshVar": null
       },
       "generalInfoMapping": {
         "containerNumber": "D1:G1",
@@ -67,7 +69,8 @@
         "widthGross": "D",
         "slabNoNet": "B",
         "lengthNet": "F",
-        "widthNet": "G"
+        "widthNet": "G",
+        "freshVar": "I"
       },
       "generalInfoMapping": {
         "containerNumber": "E9",
@@ -94,7 +97,8 @@
         "widthGross": "D",
         "slabNoNet": "B",
         "lengthNet": "F",
-        "widthNet": "G"
+        "widthNet": "G",
+        "freshVar": null
       },
       "generalInfoMapping": {
         "containerNumber": "H6",
@@ -121,7 +125,8 @@
         "widthGross": "D",
         "slabNoNet": "G",
         "lengthNet": "H",
-        "widthNet": "J"
+        "widthNet": "J",
+        "freshVar": null
       },
       "generalInfoMapping": {
         "containerNumber": null,
@@ -129,6 +134,34 @@
         "typeOfPolish": null,
         "numberOfSlabs": null,
         "loadingDate": null,
+        "invoiceNumber": null,
+        "invoiceDate": null
+      }
+    },
+    {
+      "name": "SVE",
+      "workbook": {
+        "sheetName": "Sheet1",
+        "headerRowIndex": 3,
+        "firstDataRowIndex": 4,
+        "stopKeywords": ["TOTAL", "Total", "GROSS TOTAL", "NET TOTAL"],
+        "stopIfEmpty": true
+      },
+      "columnMapping": {
+        "slabNoGross": "A",
+        "lengthGross": "B",
+        "widthGross": "C",
+        "slabNoNet": "E",
+        "lengthNet": "F",
+        "widthNet": "G",
+        "freshVar": "I"
+      },
+      "generalInfoMapping": {
+        "containerNumber": null,
+        "materialName": "B1:D1",
+        "typeOfPolish": null,
+        "numberOfSlabs": null,
+        "loadingDate": "A2",
         "invoiceNumber": null,
         "invoiceDate": null
       }

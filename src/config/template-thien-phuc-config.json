@@ -12,6 +12,7 @@
     "slabNoNet": "E",
     "lengthNet": "F",
     "widthNet": "G",
-    "netSquareMeter": "H"
+    "netSquareMeter": "H",
+    "freshVar": "I"
   }
 }

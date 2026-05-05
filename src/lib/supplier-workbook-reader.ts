@@ -8,6 +8,7 @@ type SupplierColumnMapping = Readonly<{
   slabNoNet: string
   lengthNet: string
   widthNet: string
+  freshVar: string | null
 }>
 
 type SupplierGeneralInfoMapping = Readonly<{
@@ -47,6 +48,7 @@ type SupplierSlabRow = Readonly<{
   slabNoNet: string
   lengthNet: number | null
   widthNet: number | null
+  freshVar: "Fresh" | "Var"
 }>
 
 type SupplierGeneralInfo = Readonly<{
@@ -177,6 +179,14 @@ function parseRows(sheet: XLSX.WorkSheet, supplierConfig: SupplierConfig): reado
     const slabNoNet = getColumnValueAsString(sheet, supplierConfig.columnMapping.slabNoNet, rowNumber)
     const lengthNet = getColumnValueAsNumber(sheet, supplierConfig.columnMapping.lengthNet, rowNumber)
     const widthNet = getColumnValueAsNumber(sheet, supplierConfig.columnMapping.widthNet, rowNumber)
+    const rawFreshVar = supplierConfig.columnMapping.freshVar
+      ? getColumnValueAsString(sheet, supplierConfig.columnMapping.freshVar, rowNumber)
+      : ""
+    const normalizedFreshVar = rawFreshVar.trim().toUpperCase()
+    const freshVar: "Fresh" | "Var" =
+      normalizedFreshVar === "LINE / VARIATION" || normalizedFreshVar === "V" || normalizedFreshVar === "L"
+        ? "Var"
+        : "Fresh"
     const rowValues: readonly string[] = [
       slabNoGross,
       lengthGross?.toString() ?? "",
@@ -197,7 +207,7 @@ function parseRows(sheet: XLSX.WorkSheet, supplierConfig: SupplierConfig): reado
     if (!isRowComplete(rowValues)) {
       continue
     }
-    rows.push({ rowNumber, slabNoGross, lengthGross, widthGross, slabNoNet, lengthNet, widthNet })
+    rows.push({ rowNumber, slabNoGross, lengthGross, widthGross, slabNoNet, lengthNet, widthNet, freshVar })
   }
   return rows
 }
