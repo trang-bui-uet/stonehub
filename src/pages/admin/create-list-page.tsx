@@ -2,6 +2,14 @@ import supplierConfigJson from "@/config/supplier-config.json"
 import { readAjMixWorkbookFromFile } from "@/lib/aj-mix-workbook-reader"
 import { readAyMixWorkbookFromFile } from "@/lib/ay-mix-workbook-reader"
 import { Button } from "@/components/ui/button"
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+} from "@/components/ui/combobox"
 import { readAnMixWorkbookFromFile } from "@/lib/an-mix-workbook-reader"
 import { readSveMixWorkbookFromFile } from "@/lib/sve-mix-workbook-reader"
 import { readVkMixWorkbookFromFile } from "@/lib/vk-mix-workbook-reader"
@@ -304,6 +312,12 @@ export default function CreateListPage(): ReactElement {
     }
     return { ...workbookData, rows: getAdjustedRows(workbookData.rows, dimensionAdjustmentInCentimeter) }
   }, [dimensionAdjustmentInCentimeter, workbookData])
+  function handleSupplierNameChange(value: string | null): void {
+    if (!value) {
+      return
+    }
+    setSelectedSupplierName(value)
+  }
   function handleDimensionAdjustmentChange(value: string): void {
     if (value.trim() === "") {
       setDimensionAdjustmentInput("")
@@ -396,18 +410,19 @@ export default function CreateListPage(): ReactElement {
         <div className="grid gap-4 md:grid-cols-2">
           <label className="space-y-2">
             <span className="text-sm font-medium">Nhà cung cấp</span>
-            <select
-              className="w-full rounded-md border px-3 py-2 text-sm"
-              style={{ borderColor: "var(--input)", backgroundColor: "var(--background)" }}
-              value={selectedSupplierName}
-              onChange={(event: ChangeEvent<HTMLSelectElement>): void => setSelectedSupplierName(event.target.value)}
-            >
-              {supplierNames.map((supplierName: string): ReactElement => (
-                <option key={supplierName} value={supplierName}>
-                  {supplierName}
-                </option>
-              ))}
-            </select>
+            <Combobox items={supplierNames} value={selectedSupplierName} onValueChange={handleSupplierNameChange}>
+              <ComboboxInput className="w-full" placeholder="Tìm nhà cung cấp..." />
+              <ComboboxContent>
+                <ComboboxEmpty>Không tìm thấy nhà cung cấp.</ComboboxEmpty>
+                <ComboboxList>
+                  {(supplierName: string): ReactElement => (
+                    <ComboboxItem key={supplierName} value={supplierName}>
+                      {supplierName}
+                    </ComboboxItem>
+                  )}
+                </ComboboxList>
+              </ComboboxContent>
+            </Combobox>
           </label>
           <label className="space-y-2">
             <span className="text-sm font-medium">File Excel</span>
