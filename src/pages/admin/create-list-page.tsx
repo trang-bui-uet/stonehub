@@ -177,6 +177,8 @@ function renderGeneralInfoCard(
   supplierName: string,
   generalInfo: SupplierGeneralInfo,
   numberOfRows: number,
+  totalGrossSquareMeter: number,
+  totalNetSquareMeter: number,
   title: string,
 ): ReactElement {
   return (
@@ -214,6 +216,14 @@ function renderGeneralInfoCard(
         <div>
           <span className="font-medium">Invoice Date: </span>
           <span>{generalInfo.invoiceDate || "XXX"}</span>
+        </div>
+        <div>
+          <span className="font-medium">Total Gross SQM: </span>
+          <span>{totalGrossSquareMeter}</span>
+        </div>
+        <div>
+          <span className="font-medium">Total Net SQM: </span>
+          <span>{totalNetSquareMeter}</span>
         </div>
       </div>
     </div>
@@ -421,23 +431,47 @@ export default function CreateListPage(): ReactElement {
       {adjustedWorkbookData ? (
         <section className="space-y-4">
           {isAnMixWorkbookData(adjustedWorkbookData)
-            ? adjustedWorkbookData.sections.map((section: AnMixSectionData): ReactElement => (
-                <div key={section.name} className="space-y-4">
-                  {renderGeneralInfoCard(
-                    adjustedWorkbookData.supplierName,
-                    section.generalInfo,
-                    section.rows.length,
-                    `Thông tin section ${section.name}`,
-                  )}
-                  {renderRowTable(section.rows)}
-                </div>
-              ))
+            ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                {adjustedWorkbookData.sections.map((section: AnMixSectionData): ReactElement => (
+                  <div key={section.name} className="space-y-4">
+                    {renderGeneralInfoCard(
+                      adjustedWorkbookData.supplierName,
+                      section.generalInfo,
+                      section.rows.length,
+                      calculateTotalSquareMeter(
+                        section.rows,
+                        (row: SupplierSlabRow): number | null => row.lengthGross,
+                        (row: SupplierSlabRow): number | null => row.widthGross,
+                      ),
+                      calculateTotalSquareMeter(
+                        section.rows,
+                        (row: SupplierSlabRow): number | null => row.lengthNet,
+                        (row: SupplierSlabRow): number | null => row.widthNet,
+                      ),
+                      `Thông tin chung ${section.name}`,
+                    )}
+                    {renderRowTable(section.rows)}
+                  </div>
+                ))}
+              </div>
+            )
             : (
               <div className="space-y-4">
                 {renderGeneralInfoCard(
                   adjustedWorkbookData.supplierName,
                   adjustedWorkbookData.generalInfo,
                   adjustedWorkbookData.rows.length,
+                  calculateTotalSquareMeter(
+                    adjustedWorkbookData.rows,
+                    (row: SupplierSlabRow): number | null => row.lengthGross,
+                    (row: SupplierSlabRow): number | null => row.widthGross,
+                  ),
+                  calculateTotalSquareMeter(
+                    adjustedWorkbookData.rows,
+                    (row: SupplierSlabRow): number | null => row.lengthNet,
+                    (row: SupplierSlabRow): number | null => row.widthNet,
+                  ),
                   "Thông tin chung",
                 )}
                 {renderRowTable(adjustedWorkbookData.rows)}
