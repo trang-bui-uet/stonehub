@@ -1,5 +1,14 @@
 import supplierConfigJson from "@/config/supplier-config.json"
 import * as XLSX from "xlsx"
+import {
+  getColumnValueAsNumber,
+  getColumnValueAsString,
+  getRangeValueAsString,
+  hasInvalidRequiredSizes,
+  hasStopKeyword,
+  isRowComplete,
+  isRowEmpty,
+} from "@/lib/workbook-reader-shared"
 
 type SupplierColumnMapping = Readonly<{
   slabNoGross: string
@@ -92,63 +101,6 @@ function getSupplierMixConfigByName(supplierName: string): SupplierMixConfig {
     throw new Error(`Supplier "${supplierName}" does not use mix sections.`)
   }
   return supplierConfig
-}
-function getCellValueAsString(sheet: XLSX.WorkSheet, cellAddress: string): string {
-  const cell = sheet[cellAddress]
-  if (!cell || cell.v === undefined || cell.v === null) {
-    return ""
-  }
-  return String(cell.v).trim()
-}
-function getColumnValueAsString(sheet: XLSX.WorkSheet, column: string, rowNumber: number): string {
-  return getCellValueAsString(sheet, `${column}${rowNumber}`)
-}
-function getColumnValueAsNumber(sheet: XLSX.WorkSheet, column: string, rowNumber: number): number | null {
-  const rawValue = getColumnValueAsString(sheet, column, rowNumber)
-  if (!rawValue) {
-    return null
-  }
-  const parsedValue = Number(rawValue.replaceAll(",", ""))
-  return Number.isNaN(parsedValue) ? null : parsedValue
-}
-function getRangeValueAsString(sheet: XLSX.WorkSheet, rangeAddress: string | null): string {
-  if (!rangeAddress) {
-    return ""
-  }
-  const decodedRange = XLSX.utils.decode_range(rangeAddress)
-  const collectedValues: string[] = []
-  for (let rowIndex = decodedRange.s.r; rowIndex <= decodedRange.e.r; rowIndex += 1) {
-    for (let columnIndex = decodedRange.s.c; columnIndex <= decodedRange.e.c; columnIndex += 1) {
-      const cellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex })
-      const cellValue = getCellValueAsString(sheet, cellAddress)
-      if (cellValue) {
-        collectedValues.push(cellValue)
-      }
-    }
-  }
-  return collectedValues.join(" ").trim()
-}
-function hasStopKeyword(rowValues: readonly string[], stopKeywords: readonly string[]): boolean {
-  const normalizedValues = rowValues.map((value: string): string => value.toUpperCase())
-  return stopKeywords.some((keyword: string): boolean =>
-    normalizedValues.some((value: string): boolean => value.includes(keyword.toUpperCase())),
-  )
-}
-function isRowEmpty(rowValues: readonly string[]): boolean {
-  return rowValues.every((value: string): boolean => value === "")
-}
-function isRowComplete(rowValues: readonly string[]): boolean {
-  return rowValues.every((value: string): boolean => value !== "")
-}
-function hasInvalidRequiredSizes(
-  lengthGross: number | null,
-  widthGross: number | null,
-  lengthNet: number | null,
-  widthNet: number | null,
-): boolean {
-  return [lengthGross, widthGross, lengthNet, widthNet].some(
-    (value: number | null): boolean => value === null || value <= 0,
-  )
 }
 function resolveFreshVarByText(rawFreshVar: string): "Fresh" | "Var" {
   const normalizedFreshVar = rawFreshVar.trim().toUpperCase()

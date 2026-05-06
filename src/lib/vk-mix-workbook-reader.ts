@@ -1,5 +1,12 @@
 import supplierConfigJson from "@/config/supplier-config.json"
 import * as XLSX from "xlsx"
+import {
+  getCellValueAsString,
+  getColumnValueAsNumber,
+  getColumnValueAsString,
+  hasInvalidRequiredSizes,
+  isRowEmpty,
+} from "@/lib/workbook-reader-shared"
 
 type SupplierColumnMapping = Readonly<{ slabNoGross: string; lengthGross: string; widthGross: string; slabNoNet: string; lengthNet: string; widthNet: string }>
 type SupplierWorkbookConfig = Readonly<{ sheetName: string; stopKeywords: readonly string[] }>
@@ -19,9 +26,6 @@ const HEADER_MARKER: HeaderMarker = { slabNo: "SLAB NO.", grossSize: "GROSS SIZE
 const MATERIAL_NAME_RANGE: MaterialNameRange = { startColumn: "A", endColumn: "K", rowOffsetFromHeader: -3 } as const
 
 function getSupplierConfigByName(supplierName: string): SupplierConfig { const supplierConfig = SUPPLIER_CONFIG.suppliers.find((supplier: SupplierConfig): boolean => supplier.name === supplierName); if (!supplierConfig) throw new Error(`Supplier "${supplierName}" is not configured.`); return supplierConfig }
-function getCellValueAsString(sheet: XLSX.WorkSheet, cellAddress: string): string { const cell = sheet[cellAddress]; if (!cell || cell.v === undefined || cell.v === null) return ""; return String(cell.v).trim() }
-function getColumnValueAsString(sheet: XLSX.WorkSheet, column: string, rowNumber: number): string { return getCellValueAsString(sheet, `${column}${rowNumber}`) }
-function getColumnValueAsNumber(sheet: XLSX.WorkSheet, column: string, rowNumber: number): number | null { const rawValue = getColumnValueAsString(sheet, column, rowNumber); if (!rawValue) return null; const parsedValue = Number(rawValue.replaceAll(",", "")); return Number.isNaN(parsedValue) ? null : parsedValue }
 function normalizeText(value: string): string { return value.trim().toUpperCase() }
 function getRangeRowValueAsString(sheet: XLSX.WorkSheet, startColumn: string, endColumn: string, rowNumber: number): string {
   if (rowNumber < 1) return ""
@@ -53,17 +57,7 @@ function hasStopKeyword(sheet: XLSX.WorkSheet, rowNumber: number, stopKeywords: 
 }
 function isDataRowEmpty(sheet: XLSX.WorkSheet, rowNumber: number): boolean {
   const rowValues = [getColumnValueAsString(sheet, VK_MIX_COLUMN_MAPPING.slabNoGross, rowNumber), getColumnValueAsString(sheet, VK_MIX_COLUMN_MAPPING.lengthGross, rowNumber), getColumnValueAsString(sheet, VK_MIX_COLUMN_MAPPING.widthGross, rowNumber), getColumnValueAsString(sheet, VK_MIX_COLUMN_MAPPING.slabNoNet, rowNumber), getColumnValueAsString(sheet, VK_MIX_COLUMN_MAPPING.lengthNet, rowNumber), getColumnValueAsString(sheet, VK_MIX_COLUMN_MAPPING.widthNet, rowNumber)]
-  return rowValues.every((value: string): boolean => value === "")
-}
-function hasInvalidRequiredSizes(
-  lengthGross: number | null,
-  widthGross: number | null,
-  lengthNet: number | null,
-  widthNet: number | null,
-): boolean {
-  return [lengthGross, widthGross, lengthNet, widthNet].some(
-    (value: number | null): boolean => value === null || value <= 0,
-  )
+  return isRowEmpty(rowValues)
 }
 function parseSectionRows(sheet: XLSX.WorkSheet, headerRowNumber: number, stopKeywords: readonly string[], lastRowNumber: number): readonly SupplierSlabRow[] {
   const sectionRows: SupplierSlabRow[] = []
