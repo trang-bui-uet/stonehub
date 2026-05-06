@@ -33,7 +33,7 @@
       "workbook": {
         "sheetName": "SHEET 1",
         "headerRowIndex": 8,
-        "firstDataRowIndex": 9,
+        "firstDataRowIndex": 8,
         "stopKeywords": ["TOTAL", "GROSS MEASUREMENT", "NET MEASUREMENT"],
         "stopIfEmpty": false
       },

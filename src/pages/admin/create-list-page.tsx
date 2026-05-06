@@ -224,45 +224,45 @@ function renderGeneralInfoCard(
     <div className="rounded-xl border p-3 sm:p-4" style={{ borderColor: "var(--border)" }}>
       <h2 className="text-base font-semibold">{title}</h2>
       <div className="mt-3 grid gap-3 text-sm md:grid-cols-2">
-        <div>
-          <span className="font-medium">Nhà cung cấp: </span>
-          <span>{supplierName || "XXX"}</span>
+        <div className="flex min-w-0 items-center gap-1">
+          <span className="shrink-0 font-medium">Nhà cung cấp: </span>
+          <span className="truncate">{supplierName || "XXX"}</span>
         </div>
-        <div>
-          <span className="font-medium">Container Number: </span>
-          <span>{generalInfo.containerNumber || "XXX"}</span>
+        <div className="flex min-w-0 items-center gap-1">
+          <span className="shrink-0 font-medium">Container Number: </span>
+          <span className="truncate">{generalInfo.containerNumber || "XXX"}</span>
         </div>
-        <div>
-          <span className="font-medium">Material: </span>
-          <span>{generalInfo.materialName || "XXX"}</span>
+        <div className="flex min-w-0 items-center gap-1">
+          <span className="shrink-0 font-medium">Material: </span>
+          <span className="truncate">{generalInfo.materialName || "XXX"}</span>
         </div>
-        <div>
-          <span className="font-medium">Type of polish: </span>
-          <span>{generalInfo.typeOfPolish || "XXX"}</span>
+        <div className="flex min-w-0 items-center gap-1">
+          <span className="shrink-0 font-medium">Type of polish: </span>
+          <span className="truncate">{generalInfo.typeOfPolish || "XXX"}</span>
         </div>
-        <div>
-          <span className="font-medium">Số lượng slabs: </span>
-          <span>{numberOfRows || "XXX"}</span>
+        <div className="flex min-w-0 items-center gap-1">
+          <span className="shrink-0 font-medium">Số lượng slabs: </span>
+          <span className="truncate">{numberOfRows || "XXX"}</span>
         </div>
-        <div>
-          <span className="font-medium">Loading date: </span>
-          <span>{generalInfo.loadingDate || "XXX"}</span>
+        <div className="flex min-w-0 items-center gap-1">
+          <span className="shrink-0 font-medium">Loading date: </span>
+          <span className="truncate">{generalInfo.loadingDate || "XXX"}</span>
         </div>
-        <div>
-          <span className="font-medium">Invoice Number: </span>
-          <span>{generalInfo.invoiceNumber || "XXX"}</span>
+        <div className="flex min-w-0 items-center gap-1">
+          <span className="shrink-0 font-medium">Invoice Number: </span>
+          <span className="truncate">{generalInfo.invoiceNumber || "XXX"}</span>
         </div>
-        <div>
-          <span className="font-medium">Invoice Date: </span>
-          <span>{generalInfo.invoiceDate || "XXX"}</span>
+        <div className="flex min-w-0 items-center gap-1">
+          <span className="shrink-0 font-medium">Invoice Date: </span>
+          <span className="truncate">{generalInfo.invoiceDate || "XXX"}</span>
         </div>
-        <div>
-          <span className="font-medium">Total Gross SQM: </span>
-          <span>{totalGrossSquareMeter}</span>
+        <div className="flex min-w-0 items-center gap-1">
+          <span className="shrink-0 font-medium">Total Gross SQM: </span>
+          <span className="truncate">{totalGrossSquareMeter}</span>
         </div>
-        <div>
-          <span className="font-medium">Total Net SQM: </span>
-          <span>{totalNetSquareMeter}</span>
+        <div className="flex min-w-0 items-center gap-1">
+          <span className="shrink-0 font-medium">Total Net SQM: </span>
+          <span className="truncate">{totalNetSquareMeter}</span>
         </div>
       </div>
     </div>
@@ -477,7 +477,7 @@ export default function CreateListPage(): ReactElement {
             </div>
           </label>
         </div>
-        <div className="flex justify-end">
+        <div className="flex justify-start">
           <button
             className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
             type="button"
