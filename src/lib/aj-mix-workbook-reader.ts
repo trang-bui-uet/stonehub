@@ -1,4 +1,5 @@
 import supplierConfigJson from "@/config/supplier-config.json"
+import * as XLSX from "xlsx"
 import {
   getColumnValueAsNumber,
   getColumnValueAsString,
@@ -7,8 +8,8 @@ import {
   hasStopKeyword,
   isRowComplete,
   isRowEmpty,
+  normalizeExcelDateValue,
 } from "@/lib/workbook-reader-shared"
-import * as XLSX from "xlsx"
 
 type SupplierColumnMapping = Readonly<{
   slabNoGross: string
@@ -69,24 +70,20 @@ type ReadSupplierWorkbookSectionResult = Readonly<{
   generalInfo: SupplierGeneralInfo
   rows: readonly SupplierSlabRow[]
 }>
-type ReadAyMixWorkbookResult = Readonly<{
+type ReadAjMixWorkbookResult = Readonly<{
   supplierName: string
   sheetName: string
   sections: readonly ReadSupplierWorkbookSectionResult[]
 }>
-type ReadAyMixWorkbookParams = Readonly<{
+type ReadAjMixWorkbookParams = Readonly<{
   file: File
   supplierName: string
 }>
-type ParsedMixSection = Readonly<{
-  materialName: string
-  rows: readonly SupplierSlabRow[]
-}>
 
 const SUPPLIER_CONFIG: SupplierConfigRoot = supplierConfigJson as SupplierConfigRoot
-const DEFAULT_MAX_MIX_SECTION = 2
-const HEADER_START_COLUMN_INDEX = 0
-const HEADER_END_COLUMN_INDEX = 7
+const FIRST_SECTION_INDEX = 0
+const SECOND_SECTION_INDEX = 1
+const MAX_SECTION_COUNT = 2
 const VAR_FRESH_TOKENS: readonly string[] = ["LINE / VARIATION", "LINE-VAR", "V", "L"] as const
 
 function isMixConfig(value: unknown): value is SupplierMixConfig {
@@ -117,9 +114,9 @@ function parseGeneralInfo(sheet: XLSX.WorkSheet, sectionConfig: SupplierSectionC
     materialName: getRangeValueAsString(sheet, sectionConfig.generalInfoMapping.materialName),
     typeOfPolish: getRangeValueAsString(sheet, sectionConfig.generalInfoMapping.typeOfPolish),
     numberOfSlabs: resolvedNumberOfSlabs,
-    loadingDate: getRangeValueAsString(sheet, sectionConfig.generalInfoMapping.loadingDate),
+    loadingDate: normalizeExcelDateValue(getRangeValueAsString(sheet, sectionConfig.generalInfoMapping.loadingDate)),
     invoiceNumber: getRangeValueAsString(sheet, sectionConfig.generalInfoMapping.invoiceNumber),
-    invoiceDate: getRangeValueAsString(sheet, sectionConfig.generalInfoMapping.invoiceDate),
+    invoiceDate: normalizeExcelDateValue(getRangeValueAsString(sheet, sectionConfig.generalInfoMapping.invoiceDate)),
   }
 }
 function createSectionRows(rows: readonly SupplierSlabRow[]): readonly SupplierSlabRow[] {
@@ -134,55 +131,20 @@ function resolveFreshVarByText(rawFreshVar: string): "Fresh" | "Var" {
   const normalizedFreshVar = rawFreshVar.trim().toUpperCase()
   return VAR_FRESH_TOKENS.includes(normalizedFreshVar) ? "Var" : "Fresh"
 }
-function isMergedHeaderRow(sheet: XLSX.WorkSheet, rowNumber: number): boolean {
-  const mergedRanges = sheet["!merges"] ?? []
-  const hasMergedAtoH = mergedRanges.some(
-    (mergedRange: XLSX.Range): boolean =>
-      mergedRange.s.r + 1 === rowNumber &&
-      mergedRange.e.r + 1 === rowNumber &&
-      mergedRange.s.c === HEADER_START_COLUMN_INDEX &&
-      mergedRange.e.c === HEADER_END_COLUMN_INDEX,
-  )
-  if (!hasMergedAtoH) {
-    return false
-  }
-  const headerText = getColumnValueAsString(sheet, "A", rowNumber)
-  if (!headerText) {
-    return false
-  }
-  return true
-}
-function parseRowsByYellowMergedHeader(
+function parseRowsByFirstTotalSplit(
   sheet: XLSX.WorkSheet,
   workbookConfig: SupplierWorkbookConfig,
   columnMapping: SupplierColumnMapping,
-): readonly ParsedMixSection[] {
+): readonly (readonly SupplierSlabRow[])[] {
   const workbookRange = sheet["!ref"] ? XLSX.utils.decode_range(sheet["!ref"]) : null
   if (!workbookRange) {
-    return [
-      { materialName: "", rows: [] },
-      { materialName: "", rows: [] },
-    ]
+    return [[], []]
   }
-  const parsedSections: { materialName: string; rows: SupplierSlabRow[] }[] = [
-    { materialName: "", rows: [] },
-    { materialName: "", rows: [] },
-  ]
-  let sectionIndex = -1
+  const parsedSections: SupplierSlabRow[][] = [[], []]
+  let sectionIndex = FIRST_SECTION_INDEX
   const firstRowNumber = workbookConfig.firstDataRowIndex
   const lastRowNumber = workbookRange.e.r + 1
   for (let rowNumber = firstRowNumber; rowNumber <= lastRowNumber; rowNumber += 1) {
-    if (isMergedHeaderRow(sheet, rowNumber)) {
-      sectionIndex += 1
-      if (sectionIndex >= DEFAULT_MAX_MIX_SECTION) {
-        break
-      }
-      parsedSections[sectionIndex].materialName = getColumnValueAsString(sheet, "A", rowNumber)
-      continue
-    }
-    if (sectionIndex < 0) {
-      continue
-    }
     const slabNoGross = getColumnValueAsString(sheet, columnMapping.slabNoGross, rowNumber)
     const lengthGross = getColumnValueAsNumber(sheet, columnMapping.lengthGross, rowNumber)
     const widthGross = getColumnValueAsNumber(sheet, columnMapping.widthGross, rowNumber)
@@ -202,9 +164,22 @@ function parseRowsByYellowMergedHeader(
       freshVar,
     ]
     if (hasStopKeyword(rowValues, workbookConfig.stopKeywords)) {
+      if (sectionIndex === FIRST_SECTION_INDEX && parsedSections[FIRST_SECTION_INDEX].length > 0) {
+        sectionIndex = SECOND_SECTION_INDEX
+        continue
+      }
+      if (sectionIndex === SECOND_SECTION_INDEX && parsedSections[SECOND_SECTION_INDEX].length > 0) {
+        break
+      }
       continue
     }
-    if (workbookConfig.stopIfEmpty && parsedSections[sectionIndex].rows.length > 0 && isRowEmpty(rowValues)) {
+    if (sectionIndex >= MAX_SECTION_COUNT) {
+      break
+    }
+    if (sectionIndex === SECOND_SECTION_INDEX && slabNoGross === "") {
+      continue
+    }
+    if (workbookConfig.stopIfEmpty && parsedSections[sectionIndex].length > 0 && isRowEmpty(rowValues)) {
       continue
     }
     if (isRowEmpty(rowValues)) {
@@ -216,8 +191,8 @@ function parseRowsByYellowMergedHeader(
     if (!isRowComplete(rowValues)) {
       continue
     }
-    parsedSections[sectionIndex].rows.push({
-      rowNumber: parsedSections[sectionIndex].rows.length + 1,
+    parsedSections[sectionIndex].push({
+      rowNumber: parsedSections[sectionIndex].length + 1,
       slabNoGross,
       lengthGross,
       widthGross,
@@ -231,9 +206,9 @@ function parseRowsByYellowMergedHeader(
 }
 
 /**
- * Read AY mix workbook and split sections by yellow merged headers.
+ * Read AJ mix workbook and split second section after first section total row.
  */
-export async function readAyMixWorkbookFromFile(params: ReadAyMixWorkbookParams): Promise<ReadAyMixWorkbookResult> {
+export async function readAjMixWorkbookFromFile(params: ReadAjMixWorkbookParams): Promise<ReadAjMixWorkbookResult> {
   const supplierConfig = getSupplierMixConfigByName(params.supplierName)
   const mix1SectionConfig = supplierConfig.sections.find(
     (sectionConfig: SupplierSectionConfig): boolean => sectionConfig.name === "mix1",
@@ -245,7 +220,7 @@ export async function readAyMixWorkbookFromFile(params: ReadAyMixWorkbookParams)
     throw new Error(`Supplier "${params.supplierName}" must define "mix1" and "mix2".`)
   }
   const fileBuffer = await params.file.arrayBuffer()
-  const workbook = XLSX.read(fileBuffer, { type: "array", cellStyles: true })
+  const workbook = XLSX.read(fileBuffer, { type: "array" })
   const configuredSheetName = supplierConfig.workbook.sheetName
   const firstSheetName = workbook.SheetNames[0] ?? ""
   const resolvedSheetName = workbook.Sheets[configuredSheetName] ? configuredSheetName : firstSheetName
@@ -253,27 +228,15 @@ export async function readAyMixWorkbookFromFile(params: ReadAyMixWorkbookParams)
   if (!sheet) {
     throw new Error("Workbook does not contain any readable sheet.")
   }
-  const parsedSections = parseRowsByYellowMergedHeader(sheet, supplierConfig.workbook, mix1SectionConfig.columnMapping)
-  const mix1Section = parsedSections[0] ?? { materialName: "", rows: [] }
-  const mix2Section = parsedSections[1] ?? { materialName: "", rows: [] }
-  const mix1Rows = createSectionRows(mix1Section.rows)
-  const mix2Rows = createSectionRows(mix2Section.rows)
-  const mix1GeneralInfo = parseGeneralInfo(sheet, mix1SectionConfig, mix1Rows.length)
-  const mix2GeneralInfo = parseGeneralInfo(sheet, mix2SectionConfig, mix2Rows.length)
+  const parsedSections = parseRowsByFirstTotalSplit(sheet, supplierConfig.workbook, mix1SectionConfig.columnMapping)
+  const mix1Rows = createSectionRows(parsedSections[0] ?? [])
+  const mix2Rows = createSectionRows(parsedSections[1] ?? [])
   return {
     supplierName: supplierConfig.name,
     sheetName: resolvedSheetName,
     sections: [
-      {
-        name: "mix1",
-        generalInfo: { ...mix1GeneralInfo, materialName: mix1Section.materialName || mix1GeneralInfo.materialName },
-        rows: mix1Rows,
-      },
-      {
-        name: "mix2",
-        generalInfo: { ...mix2GeneralInfo, materialName: mix2Section.materialName || mix2GeneralInfo.materialName },
-        rows: mix2Rows,
-      },
+      { name: "mix1", generalInfo: parseGeneralInfo(sheet, mix1SectionConfig, mix1Rows.length), rows: mix1Rows },
+      { name: "mix2", generalInfo: parseGeneralInfo(sheet, mix2SectionConfig, mix2Rows.length), rows: mix2Rows },
     ],
   }
 }

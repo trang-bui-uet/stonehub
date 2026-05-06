@@ -16,7 +16,7 @@
         "slabNoNet": "F",
         "lengthNet": "G",
         "widthNet": "H",
-        "freshVar": null
+        "freshVar": "E"
       },
       "generalInfoMapping": {
         "containerNumber": "A3:B3",
@@ -26,6 +26,61 @@
         "invoiceNumber": "E3:F3",
         "invoiceDate": null
       }
+    },
+    {
+      "name": "AJ (mix)",
+      "mixed": true,
+      "workbook": {
+        "sheetName": "SHEET 1",
+        "headerRowIndex": 8,
+        "firstDataRowIndex": 9,
+        "stopKeywords": ["TOTAL", "GROSS MEASUREMENT", "NET MEASUREMENT"],
+        "stopIfEmpty": false
+      },
+      "sections": [
+        {
+          "name": "mix1",
+          "columnMapping": {
+            "slabNoGross": "A",
+            "lengthGross": "B",
+            "widthGross": "C",
+            "slabNoNet": "F",
+            "lengthNet": "G",
+            "widthNet": "H",
+            "freshVar": "E"
+          },
+          "generalInfoMapping": {
+            "containerNumber": "A3:B3",
+            "materialName": "A1:I1",
+            "typeOfPolish": null,
+            "numberOfSlabs": "G5:I5",
+            "loadingDate": "C5:D5",
+            "invoiceNumber": "E3:F3",
+            "invoiceDate": null
+          }
+        },
+        {
+          "name": "mix2",
+          "columnMapping": {
+            "slabNoGross": "A",
+            "lengthGross": "B",
+            "widthGross": "C",
+            "slabNoNet": "F",
+            "lengthNet": "G",
+            "widthNet": "H",
+            "freshVar": "E"
+          },
+          "generalInfoMapping": {
+            "containerNumber": "A3:B3",
+            "materialName": "A170:D170",
+            "typeOfPolish": null,
+            "numberOfSlabs": null,
+            "loadingDate": "C5:D5",
+            "invoiceNumber": "E3:F3",
+            "invoiceDate": null
+          }
+        }
+      ]
     },
     {
       "name": "AGM",

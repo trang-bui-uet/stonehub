@@ -1,4 +1,5 @@
 import supplierConfigJson from "@/config/supplier-config.json"
+import { readAjMixWorkbookFromFile } from "@/lib/aj-mix-workbook-reader"
 import { readAyMixWorkbookFromFile } from "@/lib/ay-mix-workbook-reader"
 import { Button } from "@/components/ui/button"
 import { readAnMixWorkbookFromFile } from "@/lib/an-mix-workbook-reader"
@@ -21,11 +22,13 @@ type SupplierConfigRoot = Readonly<{
 }>
 
 type StandardSupplierWorkbookData = Awaited<ReturnType<typeof readSupplierWorkbookFromFile>>
+type AjMixSupplierWorkbookData = Awaited<ReturnType<typeof readAjMixWorkbookFromFile>>
 type AyMixSupplierWorkbookData = Awaited<ReturnType<typeof readAyMixWorkbookFromFile>>
 type AnMixSupplierWorkbookData = Awaited<ReturnType<typeof readAnMixWorkbookFromFile>>
 type SveMixSupplierWorkbookData = Awaited<ReturnType<typeof readSveMixWorkbookFromFile>>
 type VkMixSupplierWorkbookData = Awaited<ReturnType<typeof readVkMixWorkbookFromFile>>
 type MixSupplierWorkbookData =
+  | AjMixSupplierWorkbookData
   | AyMixSupplierWorkbookData
   | AnMixSupplierWorkbookData
   | VkMixSupplierWorkbookData
@@ -36,6 +39,7 @@ type SupplierGeneralInfo = StandardSupplierWorkbookData["generalInfo"]
 type MixSectionData = MixSupplierWorkbookData["sections"][number]
 
 const SUPPLIER_CONFIG: SupplierConfigRoot = supplierConfigJson as SupplierConfigRoot
+const AJ_MIX_SUPPLIER_NAME = "AJ (mix)"
 const AY_MIX_SUPPLIER_NAME = "AY (mix)"
 const AN_MIX_SUPPLIER_NAME = "AN (mix)"
 const SVE_MIX_SUPPLIER_NAME = "SVE (mix)"
@@ -338,7 +342,9 @@ export default function CreateListPage(): ReactElement {
     setDimensionAdjustmentInput(DEFAULT_DIMENSION_ADJUSTMENT_INPUT)
     try {
       let parsedWorkbookData: SupplierWorkbookData
-      if (selectedSupplierName === AY_MIX_SUPPLIER_NAME) {
+      if (selectedSupplierName === AJ_MIX_SUPPLIER_NAME) {
+        parsedWorkbookData = await readAjMixWorkbookFromFile({ file: inputFile, supplierName: selectedSupplierName })
+      } else if (selectedSupplierName === AY_MIX_SUPPLIER_NAME) {
         parsedWorkbookData = await readAyMixWorkbookFromFile({ file: inputFile, supplierName: selectedSupplierName })
       } else if (selectedSupplierName === AN_MIX_SUPPLIER_NAME) {
         parsedWorkbookData = await readAnMixWorkbookFromFile({ file: inputFile, supplierName: selectedSupplierName })

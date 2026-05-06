@@ -8,7 +8,7 @@ import {
   isRowEmpty,
 } from "@/lib/workbook-reader-shared"
 
-type SupplierColumnMapping = Readonly<{ slabNoGross: string; lengthGross: string; widthGross: string; slabNoNet: string; lengthNet: string; widthNet: string }>
+type SupplierColumnMapping = Readonly<{ slabNoGross: string; lengthGross: string; widthGross: string; slabNoNet: string; lengthNet: string; widthNet: string; freshVar: string | null }>
 type SupplierWorkbookConfig = Readonly<{ sheetName: string; stopKeywords: readonly string[] }>
 type SupplierConfig = Readonly<{ name: string; workbook: SupplierWorkbookConfig }>
 type SupplierConfigRoot = Readonly<{ suppliers: readonly SupplierConfig[] }>
@@ -21,9 +21,10 @@ type HeaderMarker = Readonly<{ slabNo: string; grossSize: string; netSize: strin
 type MaterialNameRange = Readonly<{ startColumn: string; endColumn: string; rowOffsetFromHeader: number }>
 
 const SUPPLIER_CONFIG: SupplierConfigRoot = supplierConfigJson as SupplierConfigRoot
-const VK_MIX_COLUMN_MAPPING: SupplierColumnMapping = { slabNoGross: "A", lengthGross: "B", widthGross: "D", slabNoNet: "G", lengthNet: "H", widthNet: "J" } as const
+const VK_MIX_COLUMN_MAPPING: SupplierColumnMapping = { slabNoGross: "A", lengthGross: "B", widthGross: "D", slabNoNet: "G", lengthNet: "H", widthNet: "J", freshVar: null } as const
 const HEADER_MARKER: HeaderMarker = { slabNo: "SLAB NO.", grossSize: "GROSS SIZE IN CM", netSize: "NET SIZE IN CM" } as const
 const MATERIAL_NAME_RANGE: MaterialNameRange = { startColumn: "A", endColumn: "K", rowOffsetFromHeader: -3 } as const
+const VAR_FRESH_TOKENS: readonly string[] = ["LINE / VARIATION", "LINE-VAR", "V", "L"] as const
 
 function getSupplierConfigByName(supplierName: string): SupplierConfig { const supplierConfig = SUPPLIER_CONFIG.suppliers.find((supplier: SupplierConfig): boolean => supplier.name === supplierName); if (!supplierConfig) throw new Error(`Supplier "${supplierName}" is not configured.`); return supplierConfig }
 function normalizeText(value: string): string { return value.trim().toUpperCase() }
@@ -59,6 +60,10 @@ function isDataRowEmpty(sheet: XLSX.WorkSheet, rowNumber: number): boolean {
   const rowValues = [getColumnValueAsString(sheet, VK_MIX_COLUMN_MAPPING.slabNoGross, rowNumber), getColumnValueAsString(sheet, VK_MIX_COLUMN_MAPPING.lengthGross, rowNumber), getColumnValueAsString(sheet, VK_MIX_COLUMN_MAPPING.widthGross, rowNumber), getColumnValueAsString(sheet, VK_MIX_COLUMN_MAPPING.slabNoNet, rowNumber), getColumnValueAsString(sheet, VK_MIX_COLUMN_MAPPING.lengthNet, rowNumber), getColumnValueAsString(sheet, VK_MIX_COLUMN_MAPPING.widthNet, rowNumber)]
   return isRowEmpty(rowValues)
 }
+function resolveFreshVarByText(rawFreshVar: string): "Fresh" | "Var" {
+  const normalizedFreshVar = rawFreshVar.trim().toUpperCase()
+  return VAR_FRESH_TOKENS.includes(normalizedFreshVar) ? "Var" : "Fresh"
+}
 function parseSectionRows(sheet: XLSX.WorkSheet, headerRowNumber: number, stopKeywords: readonly string[], lastRowNumber: number): readonly SupplierSlabRow[] {
   const sectionRows: SupplierSlabRow[] = []
   for (let rowNumber = headerRowNumber + 1; rowNumber <= lastRowNumber; rowNumber += 1) {
@@ -70,8 +75,11 @@ function parseSectionRows(sheet: XLSX.WorkSheet, headerRowNumber: number, stopKe
     const widthGross = getColumnValueAsNumber(sheet, VK_MIX_COLUMN_MAPPING.widthGross, rowNumber)
     const lengthNet = getColumnValueAsNumber(sheet, VK_MIX_COLUMN_MAPPING.lengthNet, rowNumber)
     const widthNet = getColumnValueAsNumber(sheet, VK_MIX_COLUMN_MAPPING.widthNet, rowNumber)
+    const freshVar = resolveFreshVarByText(
+      VK_MIX_COLUMN_MAPPING.freshVar ? getColumnValueAsString(sheet, VK_MIX_COLUMN_MAPPING.freshVar, rowNumber) : "",
+    )
     if (!slabNoGross || !slabNoNet || hasInvalidRequiredSizes(lengthGross, widthGross, lengthNet, widthNet)) continue
-    sectionRows.push({ rowNumber: sectionRows.length + 1, slabNoGross, lengthGross, widthGross, slabNoNet, lengthNet, widthNet, freshVar: "Fresh" })
+    sectionRows.push({ rowNumber: sectionRows.length + 1, slabNoGross, lengthGross, widthGross, slabNoNet, lengthNet, widthNet, freshVar })
   }
   return sectionRows
 }
