@@ -1,0 +1,77 @@
+import supplierConfigJson from "@/config/supplier-config.json"
+import * as XLSX from "xlsx"
+
+type SupplierColumnMapping = Readonly<{ slabNoGross: string; lengthGross: string; widthGross: string; slabNoNet: string; lengthNet: string; widthNet: string }>
+type SupplierWorkbookConfig = Readonly<{ sheetName: string; stopKeywords: readonly string[] }>
+type SupplierConfig = Readonly<{ name: string; workbook: SupplierWorkbookConfig }>
+type SupplierConfigRoot = Readonly<{ suppliers: readonly SupplierConfig[] }>
+type SupplierSlabRow = Readonly<{ rowNumber: number; slabNoGross: string; lengthGross: number | null; widthGross: number | null; slabNoNet: string; lengthNet: number | null; widthNet: number | null; freshVar: "Fresh" | "Var" }>
+type SupplierGeneralInfo = Readonly<{ containerNumber: string; materialName: string; typeOfPolish: string; numberOfSlabs: string; loadingDate: string; invoiceNumber: string; invoiceDate: string }>
+type ReadVkMixWorkbookSectionResult = Readonly<{ name: string; generalInfo: SupplierGeneralInfo; rows: readonly SupplierSlabRow[] }>
+type ReadVkMixWorkbookResult = Readonly<{ supplierName: string; sheetName: string; sections: readonly ReadVkMixWorkbookSectionResult[] }>
+type ReadVkMixWorkbookParams = Readonly<{ file: File; supplierName: string }>
+type HeaderMarker = Readonly<{ slabNo: string; grossSize: string; netSize: string }>
+
+const SUPPLIER_CONFIG: SupplierConfigRoot = supplierConfigJson as SupplierConfigRoot
+const VK_MIX_COLUMN_MAPPING: SupplierColumnMapping = { slabNoGross: "A", lengthGross: "B", widthGross: "D", slabNoNet: "G", lengthNet: "H", widthNet: "J" } as const
+const HEADER_MARKER: HeaderMarker = { slabNo: "SLAB NO.", grossSize: "GROSS SIZE IN CM", netSize: "NET SIZE IN CM" } as const
+
+function getSupplierConfigByName(supplierName: string): SupplierConfig { const supplierConfig = SUPPLIER_CONFIG.suppliers.find((supplier: SupplierConfig): boolean => supplier.name === supplierName); if (!supplierConfig) throw new Error(`Supplier "${supplierName}" is not configured.`); return supplierConfig }
+function getCellValueAsString(sheet: XLSX.WorkSheet, cellAddress: string): string { const cell = sheet[cellAddress]; if (!cell || cell.v === undefined || cell.v === null) return ""; return String(cell.v).trim() }
+function getColumnValueAsString(sheet: XLSX.WorkSheet, column: string, rowNumber: number): string { return getCellValueAsString(sheet, `${column}${rowNumber}`) }
+function getColumnValueAsNumber(sheet: XLSX.WorkSheet, column: string, rowNumber: number): number | null { const rawValue = getColumnValueAsString(sheet, column, rowNumber); if (!rawValue) return null; const parsedValue = Number(rawValue.replaceAll(",", "")); return Number.isNaN(parsedValue) ? null : parsedValue }
+function normalizeText(value: string): string { return value.trim().toUpperCase() }
+function isHeaderRow(sheet: XLSX.WorkSheet, rowNumber: number): boolean {
+  const slabNoValue = normalizeText(getColumnValueAsString(sheet, "A", rowNumber))
+  const grossSizeValue = normalizeText(getColumnValueAsString(sheet, "B", rowNumber))
+  const netSizeValue = normalizeText(getColumnValueAsString(sheet, "H", rowNumber))
+  return slabNoValue === HEADER_MARKER.slabNo && grossSizeValue === HEADER_MARKER.grossSize && netSizeValue === HEADER_MARKER.netSize
+}
+function hasStopKeyword(sheet: XLSX.WorkSheet, rowNumber: number, stopKeywords: readonly string[]): boolean {
+  const grossSlabNoValue = normalizeText(getColumnValueAsString(sheet, VK_MIX_COLUMN_MAPPING.slabNoGross, rowNumber))
+  const netSlabNoValue = normalizeText(getColumnValueAsString(sheet, VK_MIX_COLUMN_MAPPING.slabNoNet, rowNumber))
+  return stopKeywords.some((keyword: string): boolean => { const normalizedKeyword = normalizeText(keyword); return grossSlabNoValue.includes(normalizedKeyword) || netSlabNoValue.includes(normalizedKeyword) })
+}
+function isDataRowEmpty(sheet: XLSX.WorkSheet, rowNumber: number): boolean {
+  const rowValues = [getColumnValueAsString(sheet, VK_MIX_COLUMN_MAPPING.slabNoGross, rowNumber), getColumnValueAsString(sheet, VK_MIX_COLUMN_MAPPING.lengthGross, rowNumber), getColumnValueAsString(sheet, VK_MIX_COLUMN_MAPPING.widthGross, rowNumber), getColumnValueAsString(sheet, VK_MIX_COLUMN_MAPPING.slabNoNet, rowNumber), getColumnValueAsString(sheet, VK_MIX_COLUMN_MAPPING.lengthNet, rowNumber), getColumnValueAsString(sheet, VK_MIX_COLUMN_MAPPING.widthNet, rowNumber)]
+  return rowValues.every((value: string): boolean => value === "")
+}
+function parseSectionRows(sheet: XLSX.WorkSheet, headerRowNumber: number, stopKeywords: readonly string[], lastRowNumber: number): readonly SupplierSlabRow[] {
+  const sectionRows: SupplierSlabRow[] = []
+  for (let rowNumber = headerRowNumber + 1; rowNumber <= lastRowNumber; rowNumber += 1) {
+    if (hasStopKeyword(sheet, rowNumber, stopKeywords)) break
+    if (isDataRowEmpty(sheet, rowNumber)) continue
+    const slabNoGross = getColumnValueAsString(sheet, VK_MIX_COLUMN_MAPPING.slabNoGross, rowNumber)
+    const slabNoNet = getColumnValueAsString(sheet, VK_MIX_COLUMN_MAPPING.slabNoNet, rowNumber)
+    const lengthGross = getColumnValueAsNumber(sheet, VK_MIX_COLUMN_MAPPING.lengthGross, rowNumber)
+    const widthGross = getColumnValueAsNumber(sheet, VK_MIX_COLUMN_MAPPING.widthGross, rowNumber)
+    const lengthNet = getColumnValueAsNumber(sheet, VK_MIX_COLUMN_MAPPING.lengthNet, rowNumber)
+    const widthNet = getColumnValueAsNumber(sheet, VK_MIX_COLUMN_MAPPING.widthNet, rowNumber)
+    if (!slabNoGross || !slabNoNet || lengthGross === null || widthGross === null || lengthNet === null || widthNet === null) continue
+    sectionRows.push({ rowNumber: sectionRows.length + 1, slabNoGross, lengthGross, widthGross, slabNoNet, lengthNet, widthNet, freshVar: "Fresh" })
+  }
+  return sectionRows
+}
+function createDefaultGeneralInfo(rowCount: number): SupplierGeneralInfo { return { containerNumber: "", materialName: "", typeOfPolish: "", numberOfSlabs: rowCount.toString(), loadingDate: "", invoiceNumber: "", invoiceDate: "" } }
+function parseSectionsFromSheet(sheet: XLSX.WorkSheet, stopKeywords: readonly string[]): readonly ReadVkMixWorkbookSectionResult[] {
+  const workbookRange = sheet["!ref"] ? XLSX.utils.decode_range(sheet["!ref"]) : null
+  if (!workbookRange) return []
+  const lastRowNumber = workbookRange.e.r + 1
+  const sectionHeaders: number[] = []
+  for (let rowNumber = 1; rowNumber <= lastRowNumber; rowNumber += 1) { if (isHeaderRow(sheet, rowNumber)) sectionHeaders.push(rowNumber) }
+  return sectionHeaders.map((headerRowNumber: number, index: number): ReadVkMixWorkbookSectionResult => ({ name: `mix${index + 1}`, generalInfo: createDefaultGeneralInfo(parseSectionRows(sheet, headerRowNumber, stopKeywords, lastRowNumber).length), rows: parseSectionRows(sheet, headerRowNumber, stopKeywords, lastRowNumber) }))
+}
+
+export async function readVkMixWorkbookFromFile(params: ReadVkMixWorkbookParams): Promise<ReadVkMixWorkbookResult> {
+  const supplierConfig = getSupplierConfigByName(params.supplierName)
+  const fileBuffer = await params.file.arrayBuffer()
+  const workbook = XLSX.read(fileBuffer, { type: "array" })
+  const configuredSheetName = supplierConfig.workbook.sheetName
+  const firstSheetName = workbook.SheetNames[0] ?? ""
+  const resolvedSheetName = workbook.Sheets[configuredSheetName] ? configuredSheetName : firstSheetName
+  const sheet = workbook.Sheets[resolvedSheetName]
+  if (!sheet) throw new Error("Workbook does not contain any readable sheet.")
+  const sections = parseSectionsFromSheet(sheet, supplierConfig.workbook.stopKeywords)
+  if (sections.length === 0) throw new Error("Không tìm thấy block dữ liệu VK mix theo header marker.")
+  return { supplierName: supplierConfig.name, sheetName: resolvedSheetName, sections }
+}

@@ -97,6 +97,7 @@
     },
     {
       "name": "AN (mix)",
+      "mixed": true,
       "workbook": {
         "sheetName": "Sheet1",
         "headerRowIndex": 11,
@@ -215,6 +216,64 @@
         "invoiceNumber": null,
         "invoiceDate": null
       }
+    },
+    {
+      "name": "VK (mix)",
+      "mixed": true,
+      "workbook": {
+        "sheetName": "Sheet1",
+        "headerRowIndex": 1,
+        "firstDataRowIndex": 2,
+        "stopKeywords": [
+          "TOTAL",
+          "Total"
+        ],
+        "stopIfEmpty": false
+      },
+      "sections": [
+        {
+          "name": "mix1",
+          "columnMapping": {
+            "slabNoGross": "A",
+            "lengthGross": "B",
+            "widthGross": "D",
+            "slabNoNet": "G",
+            "lengthNet": "H",
+            "widthNet": "J",
+            "freshVar": null
+          },
+          "generalInfoMapping": {
+            "containerNumber": null,
+            "materialName": null,
+            "typeOfPolish": null,
+            "numberOfSlabs": null,
+            "loadingDate": null,
+            "invoiceNumber": null,
+            "invoiceDate": null
+          }
+        },
+        {
+          "name": "mix2",
+          "columnMapping": {
+            "slabNoGross": "A",
+            "lengthGross": "B",
+            "widthGross": "D",
+            "slabNoNet": "G",
+            "lengthNet": "H",
+            "widthNet": "J",
+            "freshVar": null
+          },
+          "generalInfoMapping": {
+            "containerNumber": null,
+            "materialName": null,
+            "typeOfPolish": null,
+            "numberOfSlabs": null,
+            "loadingDate": null,
+            "invoiceNumber": null,
+            "invoiceDate": null
+          }
+        }
+      ]
     },
     {
       "name": "SVE",

@@ -1,6 +1,7 @@
 import supplierConfigJson from "@/config/supplier-config.json"
 import { Button } from "@/components/ui/button"
 import { readAnMixWorkbookFromFile } from "@/lib/an-mix-workbook-reader"
+import { readVkMixWorkbookFromFile } from "@/lib/vk-mix-workbook-reader"
 import { readSupplierWorkbookFromFile } from "@/lib/supplier-workbook-reader"
 import { exportTemplateMixFile } from "@/lib/template-mix-exporter"
 import { exportSupplierListFile } from "@/lib/template-list-exporter"
@@ -10,6 +11,7 @@ import { useMemo, useState } from "react"
 
 type SupplierConfigItem = Readonly<{
   name: string
+  mixed?: boolean
 }>
 
 type SupplierConfigRoot = Readonly<{
@@ -18,13 +20,16 @@ type SupplierConfigRoot = Readonly<{
 
 type StandardSupplierWorkbookData = Awaited<ReturnType<typeof readSupplierWorkbookFromFile>>
 type AnMixSupplierWorkbookData = Awaited<ReturnType<typeof readAnMixWorkbookFromFile>>
-type SupplierWorkbookData = StandardSupplierWorkbookData | AnMixSupplierWorkbookData
+type VkMixSupplierWorkbookData = Awaited<ReturnType<typeof readVkMixWorkbookFromFile>>
+type MixSupplierWorkbookData = AnMixSupplierWorkbookData | VkMixSupplierWorkbookData
+type SupplierWorkbookData = StandardSupplierWorkbookData | MixSupplierWorkbookData
 type SupplierSlabRow = StandardSupplierWorkbookData["rows"][number]
 type SupplierGeneralInfo = StandardSupplierWorkbookData["generalInfo"]
-type AnMixSectionData = AnMixSupplierWorkbookData["sections"][number]
+type MixSectionData = MixSupplierWorkbookData["sections"][number]
 
 const SUPPLIER_CONFIG: SupplierConfigRoot = supplierConfigJson as SupplierConfigRoot
 const AN_MIX_SUPPLIER_NAME = "AN (mix)"
+const VK_MIX_SUPPLIER_NAME = "VK (mix)"
 const CENTIMETER_SQUARE_TO_METER_SQUARE = 10_000
 const DEFAULT_DIMENSION_ADJUSTMENT_INPUT = "0"
 const EXCEL_FILE_ACCEPT = ".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
@@ -34,11 +39,23 @@ const EXCEL_FILE_MIME_TYPES = [
 ] as const
 const EXCEL_FILE_EXTENSIONS = [".xlsx", ".xls"] as const
 
-function calculateSquareMeter(length: number | null, width: number | null): number | null {
+function roundNumberToTwoDigits(value: number): number {
+  return Math.round(value * 100) / 100
+}
+
+function calculateSquareMeterRaw(length: number | null, width: number | null): number | null {
   if (length === null || width === null) {
     return null
   }
-  return Math.round(((length * width) / CENTIMETER_SQUARE_TO_METER_SQUARE) * 100) / 100
+  return (length * width) / CENTIMETER_SQUARE_TO_METER_SQUARE
+}
+
+function calculateSquareMeter(length: number | null, width: number | null): number | null {
+  const squareMeter = calculateSquareMeterRaw(length, width)
+  if (squareMeter === null) {
+    return null
+  }
+  return roundNumberToTwoDigits(squareMeter)
 }
 
 function calculateTotalSquareMeter(
@@ -47,10 +64,10 @@ function calculateTotalSquareMeter(
   getWidth: (row: SupplierSlabRow) => number | null,
 ): number {
   const totalValue = rows.reduce((sum: number, row: SupplierSlabRow): number => {
-    const squareMeter = calculateSquareMeter(getLength(row), getWidth(row))
+    const squareMeter = calculateSquareMeterRaw(getLength(row), getWidth(row))
     return sum + (squareMeter ?? 0)
   }, 0)
-  return Math.round(totalValue * 100) / 100
+  return roundNumberToTwoDigits(totalValue)
 }
 
 function getAdjustedDimension(value: number | null, adjustmentInCentimeter: number): number | null {
@@ -243,6 +260,10 @@ export default function CreateListPage(): ReactElement {
     (): readonly string[] => SUPPLIER_CONFIG.suppliers.map((supplier: SupplierConfigItem): string => supplier.name),
     [],
   )
+  const selectedSupplierConfig = useMemo(
+    (): SupplierConfigItem | undefined => SUPPLIER_CONFIG.suppliers.find((supplier: SupplierConfigItem): boolean => supplier.name === selectedSupplierName),
+    [selectedSupplierName],
+  )
   const dimensionAdjustmentInCentimeter = useMemo((): number => {
     const trimmedInput = dimensionAdjustmentInput.trim()
     if (trimmedInput === "") {
@@ -261,7 +282,7 @@ export default function CreateListPage(): ReactElement {
     if (isAnMixWorkbookData(workbookData)) {
       return {
         ...workbookData,
-        sections: workbookData.sections.map((section: AnMixSectionData): AnMixSectionData => ({
+        sections: workbookData.sections.map((section: MixSectionData): MixSectionData => ({
           ...section,
           rows: getAdjustedRows(section.rows, dimensionAdjustmentInCentimeter),
         })),
@@ -306,10 +327,14 @@ export default function CreateListPage(): ReactElement {
     setWorkbookData(null)
     setDimensionAdjustmentInput(DEFAULT_DIMENSION_ADJUSTMENT_INPUT)
     try {
-      const parsedWorkbookData =
-        selectedSupplierName === AN_MIX_SUPPLIER_NAME
-          ? await readAnMixWorkbookFromFile({ file: inputFile, supplierName: selectedSupplierName })
-          : await readSupplierWorkbookFromFile({ file: inputFile, supplierName: selectedSupplierName })
+      let parsedWorkbookData: SupplierWorkbookData
+      if (selectedSupplierName === AN_MIX_SUPPLIER_NAME) {
+        parsedWorkbookData = await readAnMixWorkbookFromFile({ file: inputFile, supplierName: selectedSupplierName })
+      } else if (selectedSupplierName === VK_MIX_SUPPLIER_NAME) {
+        parsedWorkbookData = await readVkMixWorkbookFromFile({ file: inputFile, supplierName: selectedSupplierName })
+      } else {
+        parsedWorkbookData = await readSupplierWorkbookFromFile({ file: inputFile, supplierName: selectedSupplierName })
+      }
       setWorkbookData(parsedWorkbookData)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Không thể đọc file Excel."
@@ -327,10 +352,10 @@ export default function CreateListPage(): ReactElement {
     setErrorMessage("")
     setIsCreatingList(true)
     try {
-      if (isAnMixWorkbookData(adjustedWorkbookData)) {
-        await exportTemplateMixFile(adjustedWorkbookData)
+      if (selectedSupplierConfig?.mixed === true) {
+        await exportTemplateMixFile(adjustedWorkbookData as MixSupplierWorkbookData)
       } else {
-        await exportSupplierListFile(adjustedWorkbookData)
+        await exportSupplierListFile(adjustedWorkbookData as StandardSupplierWorkbookData)
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Không thể tạo file list."
@@ -433,7 +458,7 @@ export default function CreateListPage(): ReactElement {
           {isAnMixWorkbookData(adjustedWorkbookData)
             ? (
               <div className="grid gap-4 md:grid-cols-2">
-                {adjustedWorkbookData.sections.map((section: AnMixSectionData): ReactElement => (
+                {adjustedWorkbookData.sections.map((section: MixSectionData): ReactElement => (
                   <div key={section.name} className="space-y-4">
                     {renderGeneralInfoCard(
                       adjustedWorkbookData.supplierName,
