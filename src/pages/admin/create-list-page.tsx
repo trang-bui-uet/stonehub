@@ -14,6 +14,18 @@ import { readAnMixWorkbookFromFile } from "@/lib/an-mix-workbook-reader"
 import { readSveMixWorkbookFromFile } from "@/lib/sve-mix-workbook-reader"
 import { readVkMixWorkbookFromFile } from "@/lib/vk-mix-workbook-reader"
 import { readSupplierWorkbookFromFile } from "@/lib/supplier-workbook-reader"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { exportTemplateInvoiceFile } from "@/lib/template-invoice-exporter"
 import { exportTemplateMixFile } from "@/lib/template-mix-exporter"
 import { exportSupplierListFile } from "@/lib/template-list-exporter"
 import { Minus, Plus } from "lucide-react"
@@ -45,6 +57,15 @@ type SupplierWorkbookData = StandardSupplierWorkbookData | MixSupplierWorkbookDa
 type SupplierSlabRow = StandardSupplierWorkbookData["rows"][number]
 type SupplierGeneralInfo = StandardSupplierWorkbookData["generalInfo"]
 type MixSectionData = MixSupplierWorkbookData["sections"][number]
+type InvoiceFormData = Readonly<{
+  customerName: string
+  customerCode: string
+  legalDocument: string
+  phoneNumber: string
+  address: string
+  unitPrice: string
+  requesterName: string
+}>
 
 const SUPPLIER_CONFIG: SupplierConfigRoot = supplierConfigJson as SupplierConfigRoot
 const AJ_MIX_SUPPLIER_NAME = "AJ (mix)"
@@ -61,6 +82,15 @@ const EXCEL_FILE_MIME_TYPES = [
 ] as const
 const EXCEL_FILE_EXTENSIONS = [".xlsx", ".xls"] as const
 const VARIANT_DISPLAY_VALUE = "V"
+const DEFAULT_INVOICE_FORM_DATA: InvoiceFormData = {
+  customerName: "",
+  customerCode: "",
+  legalDocument: "",
+  phoneNumber: "",
+  address: "",
+  unitPrice: "",
+  requesterName: "",
+}
 
 function getFreshVariantDisplayValue(value: SupplierSlabRow["freshVar"] | undefined): string {
   if (value === "Var") {
@@ -288,6 +318,9 @@ export default function CreateListPage(): ReactElement {
   const [selectedSupplierName, setSelectedSupplierName] = useState<string>(SUPPLIER_CONFIG.suppliers[0]?.name ?? "")
   const [isReadingFile, setIsReadingFile] = useState<boolean>(false)
   const [isCreatingList, setIsCreatingList] = useState<boolean>(false)
+  const [isCreatingInvoice, setIsCreatingInvoice] = useState<boolean>(false)
+  const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState<boolean>(false)
+  const [invoiceFormData, setInvoiceFormData] = useState<InvoiceFormData>(DEFAULT_INVOICE_FORM_DATA)
   const [errorMessage, setErrorMessage] = useState<string>("")
   const [workbookData, setWorkbookData] = useState<SupplierWorkbookData | null>(null)
   const [dimensionAdjustmentInput, setDimensionAdjustmentInput] = useState<string>(
@@ -413,6 +446,45 @@ export default function CreateListPage(): ReactElement {
       setIsCreatingList(false)
     }
   }
+  function handleInvoiceFieldChange(fieldName: keyof InvoiceFormData, value: string): void {
+    setInvoiceFormData((currentData: InvoiceFormData): InvoiceFormData => ({ ...currentData, [fieldName]: value }))
+  }
+  async function handleCreateInvoice(): Promise<void> {
+    if (!adjustedWorkbookData) {
+      setErrorMessage("Vui lòng tải dữ liệu trước khi xuất hóa đơn.")
+      return
+    }
+    const parsedUnitPrice = Number(invoiceFormData.unitPrice)
+    if (
+      invoiceFormData.customerName.trim() === ""
+      || invoiceFormData.address.trim() === ""
+      || Number.isNaN(parsedUnitPrice)
+      || parsedUnitPrice <= 0
+    ) {
+      setErrorMessage("Vui lòng nhập đầy đủ Thông tin khách hàng và Đơn giá hợp lệ.")
+      return
+    }
+    setErrorMessage("")
+    setIsCreatingInvoice(true)
+    try {
+      await exportTemplateInvoiceFile({
+        workbookData: adjustedWorkbookData as StandardSupplierWorkbookData | MixSupplierWorkbookData,
+        customerName: invoiceFormData.customerName,
+        customerCode: invoiceFormData.customerCode,
+        legalDocument: invoiceFormData.legalDocument,
+        phoneNumber: invoiceFormData.phoneNumber,
+        address: invoiceFormData.address,
+        unitPrice: parsedUnitPrice,
+        requesterName: invoiceFormData.requesterName,
+      })
+      setIsInvoiceDialogOpen(false)
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Không thể xuất hóa đơn."
+      setErrorMessage(message)
+    } finally {
+      setIsCreatingInvoice(false)
+    }
+  }
   return (
     <div className="max-w-6xl space-y-6 px-3 pb-6 sm:px-4">
       <div className="space-y-2">
@@ -493,14 +565,95 @@ export default function CreateListPage(): ReactElement {
           </label>
         </div>
         <div className="flex justify-start">
-          <button
-            className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-            type="button"
-            onClick={handleCreateList}
-            disabled={!workbookData || isCreatingList || isReadingFile}
-          >
-            {isCreatingList ? "Đang tạo list..." : "Tạo List"}
-          </button>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            <button
+              className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+              type="button"
+              onClick={handleCreateList}
+              disabled={!workbookData || isCreatingList || isReadingFile}
+            >
+              {isCreatingList ? "Đang tạo list..." : "Tạo List"}
+            </button>
+            <Dialog open={isInvoiceDialogOpen} onOpenChange={setIsInvoiceDialogOpen}>
+              <DialogTrigger asChild>
+                <Button type="button" variant="outline" disabled={!workbookData || isReadingFile || isCreatingList}>
+                  Xuất hóa đơn
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-xl">
+                <DialogHeader>
+                  <DialogTitle>Xuất hóa đơn</DialogTitle>
+                  <DialogDescription>Nhập thông tin khách hàng và đơn giá. Số lượng sẽ lấy theo Net SQM.</DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-3 py-1">
+                  <div className="grid gap-2">
+                    <Label htmlFor="invoice-customer-name">Họ tên người mua hàng</Label>
+                    <Input
+                      id="invoice-customer-name"
+                      value={invoiceFormData.customerName}
+                      onChange={(event: ChangeEvent<HTMLInputElement>): void => handleInvoiceFieldChange("customerName", event.target.value)}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="invoice-customer-code">Mã cont</Label>
+                    <Input
+                      id="invoice-customer-code"
+                      value={invoiceFormData.customerCode}
+                      onChange={(event: ChangeEvent<HTMLInputElement>): void => handleInvoiceFieldChange("customerCode", event.target.value)}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="invoice-legal-document">Số giấy tờ pháp lý</Label>
+                    <Input
+                      id="invoice-legal-document"
+                      value={invoiceFormData.legalDocument}
+                      onChange={(event: ChangeEvent<HTMLInputElement>): void => handleInvoiceFieldChange("legalDocument", event.target.value)}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="invoice-phone-number">SĐT</Label>
+                    <Input
+                      id="invoice-phone-number"
+                      value={invoiceFormData.phoneNumber}
+                      onChange={(event: ChangeEvent<HTMLInputElement>): void => handleInvoiceFieldChange("phoneNumber", event.target.value)}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="invoice-address">Địa chỉ</Label>
+                    <Input
+                      id="invoice-address"
+                      value={invoiceFormData.address}
+                      onChange={(event: ChangeEvent<HTMLInputElement>): void => handleInvoiceFieldChange("address", event.target.value)}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="invoice-unit-price">Đơn giá</Label>
+                    <Input
+                      id="invoice-unit-price"
+                      type="number"
+                      min="0"
+                      step="1000"
+                      value={invoiceFormData.unitPrice}
+                      onChange={(event: ChangeEvent<HTMLInputElement>): void => handleInvoiceFieldChange("unitPrice", event.target.value)}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="invoice-requester-name">Người đề nghị xuất hóa đơn</Label>
+                    <Input
+                      id="invoice-requester-name"
+                      value={invoiceFormData.requesterName}
+                      onChange={(event: ChangeEvent<HTMLInputElement>): void => handleInvoiceFieldChange("requesterName", event.target.value)}
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button type="button" onClick={handleCreateInvoice} disabled={isCreatingInvoice}>
+                    {isCreatingInvoice ? "Đang xuất hóa đơn..." : "Xuất hóa đơn"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
       </section>
       {adjustedWorkbookData ? (

@@ -1,0 +1,18 @@
+{
+  "sheetIndex": 0,
+  "cellMapping": {
+    "issueDate": "C4",
+    "customerLine": "A5",
+    "legalDocumentLine": "A6",
+    "phoneLine": "A7",
+    "addressLine": "A8",
+    "itemNumber": "A11",
+    "itemName": "B11",
+    "quantity": "C11",
+    "unitPrice": "D11",
+    "amount": "E11",
+    "subtotalAmount": "E21",
+    "totalAmount": "E23",
+    "requesterName": "D30"
+  }
+}
