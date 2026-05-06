@@ -60,6 +60,14 @@ const EXCEL_FILE_MIME_TYPES = [
   "application/vnd.ms-excel",
 ] as const
 const EXCEL_FILE_EXTENSIONS = [".xlsx", ".xls"] as const
+const VARIANT_DISPLAY_VALUE = "V"
+
+function getFreshVariantDisplayValue(value: SupplierSlabRow["freshVar"] | undefined): string {
+  if (value === "Var") {
+    return VARIANT_DISPLAY_VALUE
+  }
+  return ""
+}
 
 function roundNumberToTwoDigits(value: number): number {
   return Math.round(value * 100) / 100
@@ -137,6 +145,7 @@ function renderRowTable(rows: readonly SupplierSlabRow[]): ReactElement {
               <th className="px-3 py-2">L Net</th>
               <th className="px-3 py-2">W Net</th>
               <th className="px-3 py-2">NET SQM</th>
+              <th className="px-3 py-2"></th>
             </tr>
           </thead>
           <tbody>
@@ -150,17 +159,19 @@ function renderRowTable(rows: readonly SupplierSlabRow[]): ReactElement {
                 <td className="px-3 py-2">{row.lengthNet ?? "-"}</td>
                 <td className="px-3 py-2">{row.widthNet ?? "-"}</td>
                 <td className="px-3 py-2">{calculateSquareMeter(row.lengthNet, row.widthNet) ?? "-"}</td>
+                <td className="px-3 py-2">{getFreshVariantDisplayValue(row.freshVar)}</td>
               </tr>
             ))}
             <tr className="border-t font-semibold" style={{ borderColor: "var(--border)" }}>
               <td className="px-3 py-2">Total</td>
-              <td className="px-3 py-2">-</td>
+              <td className="px-3 py-2"></td>
               <td className="px-3 py-2">-</td>
               <td className="px-3 py-2">{calculateTotalSquareMeter(rows, (row: SupplierSlabRow): number | null => row.lengthGross, (row: SupplierSlabRow): number | null => row.widthGross)}</td>
               <td className="px-3 py-2">-</td>
               <td className="px-3 py-2">-</td>
               <td className="px-3 py-2">-</td>
               <td className="px-3 py-2">{calculateTotalSquareMeter(rows, (row: SupplierSlabRow): number | null => row.lengthNet, (row: SupplierSlabRow): number | null => row.widthNet)}</td>
+              <td className="px-3 py-2">-</td>
             </tr>
           </tbody>
         </table>
@@ -200,6 +211,10 @@ function renderRowTable(rows: readonly SupplierSlabRow[]): ReactElement {
               <div>
                 <span className="font-medium">NET SQM: </span>
                 <span>{calculateSquareMeter(row.lengthNet, row.widthNet) ?? "-"}</span>
+              </div>
+              <div>
+                <span className="font-medium">Variant: </span>
+                <span>{getFreshVariantDisplayValue(row.freshVar)}</span>
               </div>
             </div>
           </div>
