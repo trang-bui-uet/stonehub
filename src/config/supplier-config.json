@@ -6,11 +6,7 @@
         "sheetName": "SHEET 1",
         "headerRowIndex": 8,
         "firstDataRowIndex": 9,
-        "stopKeywords": [
-          "TOTAL",
-          "GROSS MEASUREMENT",
-          "NET MEASUREMENT"
-        ],
+        "stopKeywords": ["TOTAL", "GROSS MEASUREMENT", "NET MEASUREMENT"],
         "stopIfEmpty": true
       },
       "columnMapping": {
@@ -37,21 +33,18 @@
         "sheetName": "Sheet1",
         "headerRowIndex": 8,
         "firstDataRowIndex": 9,
-        "stopKeywords": [
-          "TOTAL",
-          "GROSS MEASUREMENT",
-          "NET MEASUREMENT"
-        ],
-        "stopIfEmpty": true
+        "stopKeywords": ["TOTAL", "GROSS MEASUREMENT", "NET MEASUREMENT"],
+        "stopIfEmpty": true,
+        "isFreshVarColor": true
       },
       "columnMapping": {
         "slabNoGross": "A",
         "lengthGross": "B",
         "widthGross": "C",
-        "slabNoNet": "E",
-        "lengthNet": "F",
-        "widthNet": "G",
-        "freshVar": null
+        "slabNoNet": "A",
+        "lengthNet": "E",
+        "widthNet": "F",
+        "freshVar": "A"
       },
       "generalInfoMapping": {
         "containerNumber": "D1:G1",
@@ -161,10 +154,7 @@
         "sheetName": "Sheet1",
         "headerRowIndex": 8,
         "firstDataRowIndex": 9,
-        "stopKeywords": [
-          "Total Measurement",
-          "Total Measurement"
-        ],
+        "stopKeywords": ["Total Measurement", "Total Measurement"],
         "stopIfEmpty": true
       },
       "columnMapping": {
@@ -192,10 +182,7 @@
         "sheetName": "Sheet1",
         "headerRowIndex": 4,
         "firstDataRowIndex": 5,
-        "stopKeywords": [
-          "TOTAL",
-          "Total"
-        ],
+        "stopKeywords": ["TOTAL", "Total"],
         "stopIfEmpty": true
       },
       "columnMapping": {
@@ -224,10 +211,7 @@
         "sheetName": "Sheet1",
         "headerRowIndex": 1,
         "firstDataRowIndex": 2,
-        "stopKeywords": [
-          "TOTAL",
-          "Total"
-        ],
+        "stopKeywords": ["TOTAL", "Total"],
         "stopIfEmpty": false
       },
       "sections": [
@@ -281,12 +265,7 @@
         "sheetName": "Sheet1",
         "headerRowIndex": 3,
         "firstDataRowIndex": 4,
-        "stopKeywords": [
-          "TOTAL",
-          "Total",
-          "GROSS TOTAL",
-          "NET TOTAL"
-        ],
+        "stopKeywords": ["TOTAL", "Total", "GROSS TOTAL", "NET TOTAL"],
         "stopIfEmpty": true
       },
       "columnMapping": {
@@ -307,6 +286,61 @@
         "invoiceNumber": null,
         "invoiceDate": null
       }
+    },
+    {
+      "name": "SVE (mix)",
+      "mixed": true,
+      "workbook": {
+        "sheetName": "Sheet1",
+        "headerRowIndex": 3,
+        "firstDataRowIndex": 4,
+        "stopKeywords": ["TOTAL", "Total", "GROSS TOTAL", "NET TOTAL"],
+        "stopIfEmpty": true
+      },
+      "sections": [
+        {
+          "name": "mix1",
+          "columnMapping": {
+            "slabNoGross": "A",
+            "lengthGross": "B",
+            "widthGross": "C",
+            "slabNoNet": "E",
+            "lengthNet": "F",
+            "widthNet": "G",
+            "freshVar": "I"
+          },
+          "generalInfoMapping": {
+            "containerNumber": null,
+            "materialName": "B1:D1",
+            "typeOfPolish": null,
+            "numberOfSlabs": null,
+            "loadingDate": "A2",
+            "invoiceNumber": null,
+            "invoiceDate": null
+          }
+        },
+        {
+          "name": "mix2",
+          "columnMapping": {
+            "slabNoGross": "A",
+            "lengthGross": "B",
+            "widthGross": "C",
+            "slabNoNet": "E",
+            "lengthNet": "F",
+            "widthNet": "G",
+            "freshVar": "I"
+          },
+          "generalInfoMapping": {
+            "containerNumber": null,
+            "materialName": "B1:D1",
+            "typeOfPolish": null,
+            "numberOfSlabs": null,
+            "loadingDate": "A2",
+            "invoiceNumber": null,
+            "invoiceDate": null
+          }
+        }
+      ]
     }
   ]
 }

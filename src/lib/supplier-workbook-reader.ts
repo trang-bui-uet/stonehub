@@ -27,6 +27,7 @@ type SupplierWorkbookConfig = Readonly<{
   firstDataRowIndex: number
   stopKeywords: readonly string[]
   stopIfEmpty: boolean
+  isFreshVarColor?: boolean
 }>
 
 type SupplierConfig = Readonly<{
@@ -77,6 +78,7 @@ const SUPPLIER_CONFIG: SupplierConfigRoot = supplierConfigJson as SupplierConfig
 const EXCEL_DATE_MIN_SERIAL = 20_000
 const EXCEL_DATE_MAX_SERIAL = 80_000
 const EXCEL_DATE_EPOCH_UTC = Date.UTC(1899, 11, 30)
+const WHITE_RGB_CODES: readonly string[] = ["FFFFFF", "FFFFFFFF"] as const
 
 function getSupplierConfigByName(supplierName: string): SupplierConfig {
   const supplierConfig = SUPPLIER_CONFIG.suppliers.find((supplier: SupplierConfig): boolean => supplier.name === supplierName)
@@ -163,6 +165,41 @@ function isRowEmpty(rowValues: readonly string[]): boolean {
 function isRowComplete(rowValues: readonly string[]): boolean {
   return rowValues.every((value: string): boolean => value !== "")
 }
+function hasInvalidRequiredSizes(
+  lengthGross: number | null,
+  widthGross: number | null,
+  lengthNet: number | null,
+  widthNet: number | null,
+): boolean {
+  return [lengthGross, widthGross, lengthNet, widthNet].some(
+    (value: number | null): boolean => value === null || value <= 0,
+  )
+}
+function getCellStyleColorCode(sheet: XLSX.WorkSheet, cellAddress: string): string {
+  const cell = sheet[cellAddress] as (XLSX.CellObject & { s?: { fgColor?: { rgb?: string }; bgColor?: { rgb?: string } } }) | undefined
+  const foregroundColor = cell?.s?.fgColor?.rgb?.trim().toUpperCase() ?? ""
+  if (foregroundColor) {
+    return foregroundColor
+  }
+  return cell?.s?.bgColor?.rgb?.trim().toUpperCase() ?? ""
+}
+function isWhiteColorCode(colorCode: string): boolean {
+  if (!colorCode) {
+    return true
+  }
+  if (WHITE_RGB_CODES.includes(colorCode)) {
+    return true
+  }
+  return WHITE_RGB_CODES.includes(colorCode.startsWith("FF") ? colorCode.slice(2) : colorCode)
+}
+function resolveFreshVarByCellBackground(sheet: XLSX.WorkSheet, supplierConfig: SupplierConfig, rowNumber: number): "Fresh" | "Var" {
+  if (!supplierConfig.workbook.isFreshVarColor || !supplierConfig.columnMapping.freshVar) {
+    return "Fresh"
+  }
+  const cellAddress = `${supplierConfig.columnMapping.freshVar}${rowNumber}`
+  const colorCode = getCellStyleColorCode(sheet, cellAddress)
+  return isWhiteColorCode(colorCode) ? "Fresh" : "Var"
+}
 
 function parseRows(sheet: XLSX.WorkSheet, supplierConfig: SupplierConfig): readonly SupplierSlabRow[] {
   const rows: SupplierSlabRow[] = []
@@ -183,10 +220,15 @@ function parseRows(sheet: XLSX.WorkSheet, supplierConfig: SupplierConfig): reado
       ? getColumnValueAsString(sheet, supplierConfig.columnMapping.freshVar, rowNumber)
       : ""
     const normalizedFreshVar = rawFreshVar.trim().toUpperCase()
-    const freshVar: "Fresh" | "Var" =
+    const textFreshVar: "Fresh" | "Var" =
       normalizedFreshVar === "LINE / VARIATION" || normalizedFreshVar === "V" || normalizedFreshVar === "L"
         ? "Var"
         : "Fresh"
+    const colorFreshVar = resolveFreshVarByCellBackground(sheet, supplierConfig, rowNumber)
+    const freshVar: "Fresh" | "Var" =
+      supplierConfig.workbook.isFreshVarColor && (textFreshVar === "Var" || colorFreshVar === "Var")
+        ? "Var"
+        : textFreshVar
     const rowValues: readonly string[] = [
       slabNoGross,
       lengthGross?.toString() ?? "",
@@ -202,6 +244,9 @@ function parseRows(sheet: XLSX.WorkSheet, supplierConfig: SupplierConfig): reado
       break
     }
     if (isRowEmpty(rowValues)) {
+      continue
+    }
+    if (hasInvalidRequiredSizes(lengthGross, widthGross, lengthNet, widthNet)) {
       continue
     }
     if (!isRowComplete(rowValues)) {
@@ -236,7 +281,7 @@ function parseGeneralInfo(
 export async function readSupplierWorkbookFromFile(params: ReadSupplierWorkbookParams): Promise<ReadSupplierWorkbookResult> {
   const supplierConfig = getSupplierConfigByName(params.supplierName)
   const fileBuffer = await params.file.arrayBuffer()
-  const workbook = XLSX.read(fileBuffer, { type: "array" })
+  const workbook = XLSX.read(fileBuffer, { type: "array", cellStyles: true })
   const configuredSheetName = supplierConfig.workbook.sheetName
   const firstSheetName = workbook.SheetNames[0] ?? ""
   const resolvedSheetName = workbook.Sheets[configuredSheetName] ? configuredSheetName : firstSheetName

@@ -21,7 +21,6 @@ type SupplierGeneralInfoMapping = Readonly<{
 }>
 type SupplierWorkbookConfig = Readonly<{
   sheetName: string
-  headerRowIndex: number
   firstDataRowIndex: number
   stopKeywords: readonly string[]
   stopIfEmpty: boolean
@@ -36,9 +35,7 @@ type SupplierMixConfig = Readonly<{
   workbook: SupplierWorkbookConfig
   sections: readonly SupplierSectionConfig[]
 }>
-type SupplierConfigRoot = Readonly<{
-  suppliers: readonly unknown[]
-}>
+type SupplierConfigRoot = Readonly<{ suppliers: readonly unknown[] }>
 type SupplierSlabRow = Readonly<{
   rowNumber: number
   slabNoGross: string
@@ -63,34 +60,26 @@ type ReadSupplierWorkbookSectionResult = Readonly<{
   generalInfo: SupplierGeneralInfo
   rows: readonly SupplierSlabRow[]
 }>
-type ReadAnMixWorkbookResult = Readonly<{
+type ReadSveMixWorkbookResult = Readonly<{
   supplierName: string
   sheetName: string
   sections: readonly ReadSupplierWorkbookSectionResult[]
 }>
-type ReadAnMixWorkbookParams = Readonly<{
+type ReadSveMixWorkbookParams = Readonly<{
   file: File
   supplierName: string
 }>
-type ParsedSectionsResult = Readonly<{
-  sections: readonly ReadSupplierWorkbookSectionResult[]
-  totalRows: number
-  filledGeneralInfoCount: number
-}>
 
 const SUPPLIER_CONFIG: SupplierConfigRoot = supplierConfigJson as SupplierConfigRoot
-const EXCEL_DATE_MIN_SERIAL = 20_000
-const EXCEL_DATE_MAX_SERIAL = 80_000
-const EXCEL_DATE_EPOCH_UTC = Date.UTC(1899, 11, 30)
+const VAR_FRESH_TOKENS: readonly string[] = ["LINE / VARIATION", "V", "L"] as const
 
 function isMixConfig(value: unknown): value is SupplierMixConfig {
   if (!value || typeof value !== "object") {
     return false
   }
   const objectValue = value as { name?: unknown; workbook?: unknown; sections?: unknown }
-  return typeof objectValue.name === "string" && Array.isArray(objectValue.sections) && Boolean(objectValue.workbook)
+  return typeof objectValue.name === "string" && Boolean(objectValue.workbook) && Array.isArray(objectValue.sections)
 }
-
 function getSupplierMixConfigByName(supplierName: string): SupplierMixConfig {
   const supplierConfig = SUPPLIER_CONFIG.suppliers.find((supplier: unknown): boolean => {
     if (!supplier || typeof supplier !== "object") {
@@ -104,7 +93,6 @@ function getSupplierMixConfigByName(supplierName: string): SupplierMixConfig {
   }
   return supplierConfig
 }
-
 function getCellValueAsString(sheet: XLSX.WorkSheet, cellAddress: string): string {
   const cell = sheet[cellAddress]
   if (!cell || cell.v === undefined || cell.v === null) {
@@ -112,21 +100,17 @@ function getCellValueAsString(sheet: XLSX.WorkSheet, cellAddress: string): strin
   }
   return String(cell.v).trim()
 }
-
 function getColumnValueAsString(sheet: XLSX.WorkSheet, column: string, rowNumber: number): string {
   return getCellValueAsString(sheet, `${column}${rowNumber}`)
 }
-
 function getColumnValueAsNumber(sheet: XLSX.WorkSheet, column: string, rowNumber: number): number | null {
   const rawValue = getColumnValueAsString(sheet, column, rowNumber)
   if (!rawValue) {
     return null
   }
-  const normalizedValue = rawValue.replaceAll(",", "")
-  const parsedValue = Number(normalizedValue)
+  const parsedValue = Number(rawValue.replaceAll(",", ""))
   return Number.isNaN(parsedValue) ? null : parsedValue
 }
-
 function getRangeValueAsString(sheet: XLSX.WorkSheet, rangeAddress: string | null): string {
   if (!rangeAddress) {
     return ""
@@ -144,41 +128,15 @@ function getRangeValueAsString(sheet: XLSX.WorkSheet, rangeAddress: string | nul
   }
   return collectedValues.join(" ").trim()
 }
-
-function formatDateToDisplayText(dateValue: Date): string {
-  const day = String(dateValue.getUTCDate()).padStart(2, "0")
-  const month = String(dateValue.getUTCMonth() + 1).padStart(2, "0")
-  const year = dateValue.getUTCFullYear()
-  return `${day}/${month}/${year}`
-}
-
-function normalizeExcelDateValue(value: string): string {
-  const normalizedValue = value.trim()
-  if (!normalizedValue) {
-    return ""
-  }
-  const serialValue = Number(normalizedValue)
-  if (!Number.isFinite(serialValue) || !Number.isInteger(serialValue)) {
-    return normalizedValue
-  }
-  if (serialValue < EXCEL_DATE_MIN_SERIAL || serialValue > EXCEL_DATE_MAX_SERIAL) {
-    return normalizedValue
-  }
-  const dateValue = new Date(EXCEL_DATE_EPOCH_UTC + serialValue * 24 * 60 * 60 * 1000)
-  return formatDateToDisplayText(dateValue)
-}
-
 function hasStopKeyword(rowValues: readonly string[], stopKeywords: readonly string[]): boolean {
   const normalizedValues = rowValues.map((value: string): string => value.toUpperCase())
   return stopKeywords.some((keyword: string): boolean =>
     normalizedValues.some((value: string): boolean => value.includes(keyword.toUpperCase())),
   )
 }
-
 function isRowEmpty(rowValues: readonly string[]): boolean {
   return rowValues.every((value: string): boolean => value === "")
 }
-
 function isRowComplete(rowValues: readonly string[]): boolean {
   return rowValues.every((value: string): boolean => value !== "")
 }
@@ -192,34 +150,35 @@ function hasInvalidRequiredSizes(
     (value: number | null): boolean => value === null || value <= 0,
   )
 }
-
-function parseSectionRows(
+function resolveFreshVarByText(rawFreshVar: string): "Fresh" | "Var" {
+  const normalizedFreshVar = rawFreshVar.trim().toUpperCase()
+  return VAR_FRESH_TOKENS.includes(normalizedFreshVar) ? "Var" : "Fresh"
+}
+function isSectionWithS(rawSlabNo: string): boolean {
+  return rawSlabNo.toUpperCase().includes("(S)")
+}
+function parseRows(
   sheet: XLSX.WorkSheet,
   workbookConfig: SupplierWorkbookConfig,
-  sectionConfig: SupplierSectionConfig,
+  columnMapping: SupplierColumnMapping,
 ): readonly SupplierSlabRow[] {
   const rows: SupplierSlabRow[] = []
   const workbookRange = sheet["!ref"] ? XLSX.utils.decode_range(sheet["!ref"]) : null
   if (!workbookRange) {
     return rows
   }
-  const lastRowNumber = workbookRange.e.r + 1
   const firstRowNumber = workbookConfig.firstDataRowIndex
+  const lastRowNumber = workbookRange.e.r + 1
   for (let rowNumber = firstRowNumber; rowNumber <= lastRowNumber; rowNumber += 1) {
-    const slabNoGross = getColumnValueAsString(sheet, sectionConfig.columnMapping.slabNoGross, rowNumber)
-    const lengthGross = getColumnValueAsNumber(sheet, sectionConfig.columnMapping.lengthGross, rowNumber)
-    const widthGross = getColumnValueAsNumber(sheet, sectionConfig.columnMapping.widthGross, rowNumber)
-    const slabNoNet = getColumnValueAsString(sheet, sectionConfig.columnMapping.slabNoNet, rowNumber)
-    const lengthNet = getColumnValueAsNumber(sheet, sectionConfig.columnMapping.lengthNet, rowNumber)
-    const widthNet = getColumnValueAsNumber(sheet, sectionConfig.columnMapping.widthNet, rowNumber)
-    const rawFreshVar = sectionConfig.columnMapping.freshVar
-      ? getColumnValueAsString(sheet, sectionConfig.columnMapping.freshVar, rowNumber)
-      : ""
-    const normalizedFreshVar = rawFreshVar.trim().toUpperCase()
-    const freshVar: "Fresh" | "Var" =
-      normalizedFreshVar === "LINE / VARIATION" || normalizedFreshVar === "V" || normalizedFreshVar === "L"
-        ? "Var"
-        : "Fresh"
+    const slabNoGross = getColumnValueAsString(sheet, columnMapping.slabNoGross, rowNumber)
+    const lengthGross = getColumnValueAsNumber(sheet, columnMapping.lengthGross, rowNumber)
+    const widthGross = getColumnValueAsNumber(sheet, columnMapping.widthGross, rowNumber)
+    const slabNoNet = getColumnValueAsString(sheet, columnMapping.slabNoNet, rowNumber)
+    const lengthNet = getColumnValueAsNumber(sheet, columnMapping.lengthNet, rowNumber)
+    const widthNet = getColumnValueAsNumber(sheet, columnMapping.widthNet, rowNumber)
+    const freshVar = resolveFreshVarByText(
+      columnMapping.freshVar ? getColumnValueAsString(sheet, columnMapping.freshVar, rowNumber) : "",
+    )
     const rowValues: readonly string[] = [
       slabNoGross,
       lengthGross?.toString() ?? "",
@@ -256,106 +215,69 @@ function parseSectionRows(
   }
   return rows
 }
-
-function hasFilledGeneralInfo(generalInfo: SupplierGeneralInfo): boolean {
-  return [
-    generalInfo.containerNumber,
-    generalInfo.materialName,
-    generalInfo.typeOfPolish,
-    generalInfo.numberOfSlabs,
-    generalInfo.loadingDate,
-    generalInfo.invoiceNumber,
-    generalInfo.invoiceDate,
-  ].some((value: string): boolean => value.trim() !== "")
-}
-
-function parseSectionGeneralInfo(
-  sheet: XLSX.WorkSheet,
-  sectionConfig: SupplierSectionConfig,
-  rows: readonly SupplierSlabRow[],
-): SupplierGeneralInfo {
+function parseGeneralInfo(sheet: XLSX.WorkSheet, sectionConfig: SupplierSectionConfig, rowCount: number): SupplierGeneralInfo {
   const numberOfSlabsFromSheet = getRangeValueAsString(sheet, sectionConfig.generalInfoMapping.numberOfSlabs)
-  const resolvedNumberOfSlabs = numberOfSlabsFromSheet || rows.length.toString()
+  const resolvedNumberOfSlabs = numberOfSlabsFromSheet || rowCount.toString()
   return {
     containerNumber: getRangeValueAsString(sheet, sectionConfig.generalInfoMapping.containerNumber),
     materialName: getRangeValueAsString(sheet, sectionConfig.generalInfoMapping.materialName),
     typeOfPolish: getRangeValueAsString(sheet, sectionConfig.generalInfoMapping.typeOfPolish),
     numberOfSlabs: resolvedNumberOfSlabs,
-    loadingDate: normalizeExcelDateValue(getRangeValueAsString(sheet, sectionConfig.generalInfoMapping.loadingDate)),
+    loadingDate: getRangeValueAsString(sheet, sectionConfig.generalInfoMapping.loadingDate),
     invoiceNumber: getRangeValueAsString(sheet, sectionConfig.generalInfoMapping.invoiceNumber),
-    invoiceDate: normalizeExcelDateValue(getRangeValueAsString(sheet, sectionConfig.generalInfoMapping.invoiceDate)),
+    invoiceDate: getRangeValueAsString(sheet, sectionConfig.generalInfoMapping.invoiceDate),
   }
 }
-
-function parseSectionsFromSheet(sheet: XLSX.WorkSheet, supplierConfig: SupplierMixConfig): ParsedSectionsResult {
-  let totalRows = 0
-  let filledGeneralInfoCount = 0
-  const sections = supplierConfig.sections.map(
-    (sectionConfig: SupplierSectionConfig): ReadSupplierWorkbookSectionResult => {
-      const rows = parseSectionRows(sheet, supplierConfig.workbook, sectionConfig)
-      const generalInfo = parseSectionGeneralInfo(sheet, sectionConfig, rows)
-      totalRows += rows.length
-      if (hasFilledGeneralInfo(generalInfo)) {
-        filledGeneralInfoCount += 1
-      }
-      return { name: sectionConfig.name, rows, generalInfo }
-    },
-  )
-  return { sections, totalRows, filledGeneralInfoCount }
-}
-
-function resolveBestSheetName(workbook: XLSX.WorkBook, supplierConfig: SupplierMixConfig): string {
-  const configuredSheetName = supplierConfig.workbook.sheetName
-  const sheetNames = workbook.SheetNames
-  if (sheetNames.length === 0) {
-    return ""
-  }
-  const candidateSheetNames = [
-    configuredSheetName,
-    ...sheetNames.filter((sheetName: string): boolean => sheetName !== configuredSheetName),
-  ]
-  let bestSheetName = candidateSheetNames[0] ?? ""
-  let bestTotalRows = -1
-  let bestFilledGeneralInfoCount = -1
-  for (const sheetName of candidateSheetNames) {
-    const sheet = workbook.Sheets[sheetName]
-    if (!sheet) {
-      continue
-    }
-    const parsedResult = parseSectionsFromSheet(sheet, supplierConfig)
-    if (parsedResult.totalRows > bestTotalRows) {
-      bestSheetName = sheetName
-      bestTotalRows = parsedResult.totalRows
-      bestFilledGeneralInfoCount = parsedResult.filledGeneralInfoCount
-      continue
-    }
-    if (
-      parsedResult.totalRows === bestTotalRows &&
-      parsedResult.filledGeneralInfoCount > bestFilledGeneralInfoCount
-    ) {
-      bestSheetName = sheetName
-      bestFilledGeneralInfoCount = parsedResult.filledGeneralInfoCount
-    }
-  }
-  return bestSheetName
+function createSectionRows(
+  allRows: readonly SupplierSlabRow[],
+  shouldInclude: (row: SupplierSlabRow) => boolean,
+): readonly SupplierSlabRow[] {
+  return allRows
+    .filter((row: SupplierSlabRow): boolean => shouldInclude(row))
+    .map(
+      (row: SupplierSlabRow, index: number): SupplierSlabRow => ({
+        ...row,
+        rowNumber: index + 1,
+      }),
+    )
 }
 
 /**
- * Read workbook data for AN mix supplier by configured sections.
+ * Read workbook data for SVE mix supplier and split by slab number marker "(S)".
  */
-export async function readAnMixWorkbookFromFile(params: ReadAnMixWorkbookParams): Promise<ReadAnMixWorkbookResult> {
+export async function readSveMixWorkbookFromFile(params: ReadSveMixWorkbookParams): Promise<ReadSveMixWorkbookResult> {
   const supplierConfig = getSupplierMixConfigByName(params.supplierName)
+  const primarySection = supplierConfig.sections[0]
+  if (!primarySection) {
+    throw new Error(`Supplier "${params.supplierName}" does not define section config.`)
+  }
   const fileBuffer = await params.file.arrayBuffer()
   const workbook = XLSX.read(fileBuffer, { type: "array" })
-  const resolvedSheetName = resolveBestSheetName(workbook, supplierConfig)
+  const configuredSheetName = supplierConfig.workbook.sheetName
+  const firstSheetName = workbook.SheetNames[0] ?? ""
+  const resolvedSheetName = workbook.Sheets[configuredSheetName] ? configuredSheetName : firstSheetName
   const sheet = workbook.Sheets[resolvedSheetName]
   if (!sheet) {
     throw new Error("Workbook does not contain any readable sheet.")
   }
-  const parsedResult = parseSectionsFromSheet(sheet, supplierConfig)
+  const allRows = parseRows(sheet, supplierConfig.workbook, primarySection.columnMapping)
+  const rowsWithS = createSectionRows(allRows, (row: SupplierSlabRow): boolean => isSectionWithS(row.slabNoGross))
+  const rowsWithoutS = createSectionRows(allRows, (row: SupplierSlabRow): boolean => !isSectionWithS(row.slabNoGross))
+  const mix1SectionConfig = supplierConfig.sections.find(
+    (sectionConfig: SupplierSectionConfig): boolean => sectionConfig.name === "mix1",
+  )
+  const mix2SectionConfig = supplierConfig.sections.find(
+    (sectionConfig: SupplierSectionConfig): boolean => sectionConfig.name === "mix2",
+  )
+  if (!mix1SectionConfig || !mix2SectionConfig) {
+    throw new Error(`Supplier "${params.supplierName}" must define "mix1" and "mix2".`)
+  }
   return {
     supplierName: supplierConfig.name,
     sheetName: resolvedSheetName,
-    sections: parsedResult.sections,
+    sections: [
+      { name: "mix1", generalInfo: parseGeneralInfo(sheet, mix1SectionConfig, rowsWithS.length), rows: rowsWithS },
+      { name: "mix2", generalInfo: parseGeneralInfo(sheet, mix2SectionConfig, rowsWithoutS.length), rows: rowsWithoutS },
+    ],
   }
 }

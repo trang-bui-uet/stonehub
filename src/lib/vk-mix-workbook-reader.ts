@@ -55,6 +55,16 @@ function isDataRowEmpty(sheet: XLSX.WorkSheet, rowNumber: number): boolean {
   const rowValues = [getColumnValueAsString(sheet, VK_MIX_COLUMN_MAPPING.slabNoGross, rowNumber), getColumnValueAsString(sheet, VK_MIX_COLUMN_MAPPING.lengthGross, rowNumber), getColumnValueAsString(sheet, VK_MIX_COLUMN_MAPPING.widthGross, rowNumber), getColumnValueAsString(sheet, VK_MIX_COLUMN_MAPPING.slabNoNet, rowNumber), getColumnValueAsString(sheet, VK_MIX_COLUMN_MAPPING.lengthNet, rowNumber), getColumnValueAsString(sheet, VK_MIX_COLUMN_MAPPING.widthNet, rowNumber)]
   return rowValues.every((value: string): boolean => value === "")
 }
+function hasInvalidRequiredSizes(
+  lengthGross: number | null,
+  widthGross: number | null,
+  lengthNet: number | null,
+  widthNet: number | null,
+): boolean {
+  return [lengthGross, widthGross, lengthNet, widthNet].some(
+    (value: number | null): boolean => value === null || value <= 0,
+  )
+}
 function parseSectionRows(sheet: XLSX.WorkSheet, headerRowNumber: number, stopKeywords: readonly string[], lastRowNumber: number): readonly SupplierSlabRow[] {
   const sectionRows: SupplierSlabRow[] = []
   for (let rowNumber = headerRowNumber + 1; rowNumber <= lastRowNumber; rowNumber += 1) {
@@ -66,7 +76,7 @@ function parseSectionRows(sheet: XLSX.WorkSheet, headerRowNumber: number, stopKe
     const widthGross = getColumnValueAsNumber(sheet, VK_MIX_COLUMN_MAPPING.widthGross, rowNumber)
     const lengthNet = getColumnValueAsNumber(sheet, VK_MIX_COLUMN_MAPPING.lengthNet, rowNumber)
     const widthNet = getColumnValueAsNumber(sheet, VK_MIX_COLUMN_MAPPING.widthNet, rowNumber)
-    if (!slabNoGross || !slabNoNet || lengthGross === null || widthGross === null || lengthNet === null || widthNet === null) continue
+    if (!slabNoGross || !slabNoNet || hasInvalidRequiredSizes(lengthGross, widthGross, lengthNet, widthNet)) continue
     sectionRows.push({ rowNumber: sectionRows.length + 1, slabNoGross, lengthGross, widthGross, slabNoNet, lengthNet, widthNet, freshVar: "Fresh" })
   }
   return sectionRows
