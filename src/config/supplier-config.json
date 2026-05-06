@@ -177,6 +177,61 @@
       }
     },
     {
+      "name": "AY (mix)",
+      "mixed": true,
+      "workbook": {
+        "sheetName": "Sheet1",
+        "headerRowIndex": 8,
+        "firstDataRowIndex": 9,
+        "stopKeywords": ["TOTAL MEASUREMENT", "Total Measurement"],
+        "stopIfEmpty": false
+      },
+      "sections": [
+        {
+          "name": "mix1",
+          "columnMapping": {
+            "slabNoGross": "B",
+            "lengthGross": "C",
+            "widthGross": "D",
+            "slabNoNet": "B",
+            "lengthNet": "F",
+            "widthNet": "G",
+            "freshVar": null
+          },
+          "generalInfoMapping": {
+            "containerNumber": "H6",
+            "materialName": "B2:H2",
+            "typeOfPolish": "C4:D4",
+            "numberOfSlabs": "E4",
+            "loadingDate": null,
+            "invoiceNumber": "B6",
+            "invoiceDate": null
+          }
+        },
+        {
+          "name": "mix2",
+          "columnMapping": {
+            "slabNoGross": "B",
+            "lengthGross": "C",
+            "widthGross": "D",
+            "slabNoNet": "B",
+            "lengthNet": "F",
+            "widthNet": "G",
+            "freshVar": null
+          },
+          "generalInfoMapping": {
+            "containerNumber": "H6",
+            "materialName": "B2:H2",
+            "typeOfPolish": "C4:D4",
+            "numberOfSlabs": "E4",
+            "loadingDate": null,
+            "invoiceNumber": "B6",
+            "invoiceDate": null
+          }
+        }
+      ]
+    },
+    {
       "name": "VK",
       "workbook": {
         "sheetName": "Sheet1",
