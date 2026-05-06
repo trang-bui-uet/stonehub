@@ -11,16 +11,35 @@ type ReadVkMixWorkbookSectionResult = Readonly<{ name: string; generalInfo: Supp
 type ReadVkMixWorkbookResult = Readonly<{ supplierName: string; sheetName: string; sections: readonly ReadVkMixWorkbookSectionResult[] }>
 type ReadVkMixWorkbookParams = Readonly<{ file: File; supplierName: string }>
 type HeaderMarker = Readonly<{ slabNo: string; grossSize: string; netSize: string }>
+type MaterialNameRange = Readonly<{ startColumn: string; endColumn: string; rowOffsetFromHeader: number }>
 
 const SUPPLIER_CONFIG: SupplierConfigRoot = supplierConfigJson as SupplierConfigRoot
 const VK_MIX_COLUMN_MAPPING: SupplierColumnMapping = { slabNoGross: "A", lengthGross: "B", widthGross: "D", slabNoNet: "G", lengthNet: "H", widthNet: "J" } as const
 const HEADER_MARKER: HeaderMarker = { slabNo: "SLAB NO.", grossSize: "GROSS SIZE IN CM", netSize: "NET SIZE IN CM" } as const
+const MATERIAL_NAME_RANGE: MaterialNameRange = { startColumn: "A", endColumn: "K", rowOffsetFromHeader: -3 } as const
 
 function getSupplierConfigByName(supplierName: string): SupplierConfig { const supplierConfig = SUPPLIER_CONFIG.suppliers.find((supplier: SupplierConfig): boolean => supplier.name === supplierName); if (!supplierConfig) throw new Error(`Supplier "${supplierName}" is not configured.`); return supplierConfig }
 function getCellValueAsString(sheet: XLSX.WorkSheet, cellAddress: string): string { const cell = sheet[cellAddress]; if (!cell || cell.v === undefined || cell.v === null) return ""; return String(cell.v).trim() }
 function getColumnValueAsString(sheet: XLSX.WorkSheet, column: string, rowNumber: number): string { return getCellValueAsString(sheet, `${column}${rowNumber}`) }
 function getColumnValueAsNumber(sheet: XLSX.WorkSheet, column: string, rowNumber: number): number | null { const rawValue = getColumnValueAsString(sheet, column, rowNumber); if (!rawValue) return null; const parsedValue = Number(rawValue.replaceAll(",", "")); return Number.isNaN(parsedValue) ? null : parsedValue }
 function normalizeText(value: string): string { return value.trim().toUpperCase() }
+function getRangeRowValueAsString(sheet: XLSX.WorkSheet, startColumn: string, endColumn: string, rowNumber: number): string {
+  if (rowNumber < 1) return ""
+  const startAddress = `${startColumn}${rowNumber}`
+  const endAddress = `${endColumn}${rowNumber}`
+  const decodedRange = XLSX.utils.decode_range(`${startAddress}:${endAddress}`)
+  const values: string[] = []
+  for (let columnIndex = decodedRange.s.c; columnIndex <= decodedRange.e.c; columnIndex += 1) {
+    const cellAddress = XLSX.utils.encode_cell({ r: decodedRange.s.r, c: columnIndex })
+    const cellValue = getCellValueAsString(sheet, cellAddress)
+    if (cellValue !== "") values.push(cellValue)
+  }
+  return values.join(" ").trim()
+}
+function getMaterialNameByHeaderRow(sheet: XLSX.WorkSheet, headerRowNumber: number): string {
+  const materialRowNumber = headerRowNumber + MATERIAL_NAME_RANGE.rowOffsetFromHeader
+  return getRangeRowValueAsString(sheet, MATERIAL_NAME_RANGE.startColumn, MATERIAL_NAME_RANGE.endColumn, materialRowNumber)
+}
 function isHeaderRow(sheet: XLSX.WorkSheet, rowNumber: number): boolean {
   const slabNoValue = normalizeText(getColumnValueAsString(sheet, "A", rowNumber))
   const grossSizeValue = normalizeText(getColumnValueAsString(sheet, "B", rowNumber))
@@ -52,14 +71,18 @@ function parseSectionRows(sheet: XLSX.WorkSheet, headerRowNumber: number, stopKe
   }
   return sectionRows
 }
-function createDefaultGeneralInfo(rowCount: number): SupplierGeneralInfo { return { containerNumber: "", materialName: "", typeOfPolish: "", numberOfSlabs: rowCount.toString(), loadingDate: "", invoiceNumber: "", invoiceDate: "" } }
+function createDefaultGeneralInfo(rowCount: number, materialName: string): SupplierGeneralInfo { return { containerNumber: "", materialName, typeOfPolish: "", numberOfSlabs: rowCount.toString(), loadingDate: "", invoiceNumber: "", invoiceDate: "" } }
 function parseSectionsFromSheet(sheet: XLSX.WorkSheet, stopKeywords: readonly string[]): readonly ReadVkMixWorkbookSectionResult[] {
   const workbookRange = sheet["!ref"] ? XLSX.utils.decode_range(sheet["!ref"]) : null
   if (!workbookRange) return []
   const lastRowNumber = workbookRange.e.r + 1
   const sectionHeaders: number[] = []
   for (let rowNumber = 1; rowNumber <= lastRowNumber; rowNumber += 1) { if (isHeaderRow(sheet, rowNumber)) sectionHeaders.push(rowNumber) }
-  return sectionHeaders.map((headerRowNumber: number, index: number): ReadVkMixWorkbookSectionResult => ({ name: `mix${index + 1}`, generalInfo: createDefaultGeneralInfo(parseSectionRows(sheet, headerRowNumber, stopKeywords, lastRowNumber).length), rows: parseSectionRows(sheet, headerRowNumber, stopKeywords, lastRowNumber) }))
+  return sectionHeaders.map((headerRowNumber: number, index: number): ReadVkMixWorkbookSectionResult => {
+    const rows = parseSectionRows(sheet, headerRowNumber, stopKeywords, lastRowNumber)
+    const materialName = getMaterialNameByHeaderRow(sheet, headerRowNumber)
+    return { name: `mix${index + 1}`, generalInfo: createDefaultGeneralInfo(rows.length, materialName), rows }
+  })
 }
 
 export async function readVkMixWorkbookFromFile(params: ReadVkMixWorkbookParams): Promise<ReadVkMixWorkbookResult> {

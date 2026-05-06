@@ -86,7 +86,7 @@ function isExcelFile(file: File): boolean {
   return EXCEL_FILE_MIME_TYPES.includes(file.type as (typeof EXCEL_FILE_MIME_TYPES)[number])
 }
 
-function isAnMixWorkbookData(workbookData: SupplierWorkbookData): workbookData is AnMixSupplierWorkbookData {
+function isMixWorkbookData(workbookData: SupplierWorkbookData): workbookData is MixSupplierWorkbookData {
   return "sections" in workbookData
 }
 
@@ -279,7 +279,7 @@ export default function CreateListPage(): ReactElement {
     if (!workbookData) {
       return null
     }
-    if (isAnMixWorkbookData(workbookData)) {
+    if (isMixWorkbookData(workbookData)) {
       return {
         ...workbookData,
         sections: workbookData.sections.map((section: MixSectionData): MixSectionData => ({
@@ -455,7 +455,7 @@ export default function CreateListPage(): ReactElement {
       </section>
       {adjustedWorkbookData ? (
         <section className="space-y-4">
-          {isAnMixWorkbookData(adjustedWorkbookData)
+          {isMixWorkbookData(adjustedWorkbookData)
             ? (
               <div className="grid gap-4 md:grid-cols-2">
                 {adjustedWorkbookData.sections.map((section: MixSectionData): ReactElement => (
