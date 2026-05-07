@@ -34,7 +34,6 @@ type TemplateInvoiceCellMapping = Readonly<{
   issueDate: string
   customerLine: string
   legalDocumentLine: string
-  phoneLine: string
   addressLine: string
   itemNumber: string
   itemName: string
@@ -105,11 +104,25 @@ function formatCurrentDateLabel(): string {
   return `Ngày ${day}/${month}/${year}`
 }
 
-function buildOutputFileName(customerName: string): string {
-  const normalizedCustomerName = normalizeText(customerName).replace(/[\\/:*?"<>|]/g, "-")
-  const currentDate = new Date()
-  const dateStamp = `${currentDate.getFullYear()}${String(currentDate.getMonth() + 1).padStart(2, "0")}${String(currentDate.getDate()).padStart(2, "0")}`
-  return `hoa-don-${normalizedCustomerName || "khach-hang"}-${dateStamp}.xlsx`
+type OutputFileNameInput = Readonly<{
+  materialName: string
+  customerName: string
+  containerNumber: string
+}>
+
+function sanitizeFileNamePart(value: string, fallbackValue: string): string {
+  const normalizedValue = normalizeText(value).replace(/[\\/:*?"<>|]/g, "-")
+  if (normalizedValue === "") {
+    return fallbackValue
+  }
+  return normalizedValue
+}
+
+function buildOutputFileName(input: OutputFileNameInput): string {
+  const safeMaterialName = sanitizeFileNamePart(input.materialName, "material")
+  const safeCustomerName = sanitizeFileNamePart(input.customerName, "khach-hang")
+  const safeContainerNumber = sanitizeFileNamePart(input.containerNumber, "container")
+  return `TP - ${safeMaterialName} - ${safeCustomerName} - ${safeContainerNumber}.xlsx`
 }
 
 function setCellValue(worksheet: ExcelJS.Worksheet, cellAddress: string, value: string | number): void {
@@ -145,7 +158,6 @@ export async function exportTemplateInvoiceFile(input: InvoiceExportInput): Prom
     TEMPLATE_INVOICE_CONFIG.cellMapping.legalDocumentLine,
     `Số giấy tờ pháp lý của cá nhân: ${normalizeText(input.legalDocument)}`,
   )
-  setCellValue(worksheet, TEMPLATE_INVOICE_CONFIG.cellMapping.phoneLine, `SĐT: ${normalizeText(input.phoneNumber)}`)
   setCellValue(worksheet, TEMPLATE_INVOICE_CONFIG.cellMapping.addressLine, `Địa chỉ: ${normalizeText(input.address)}`)
   setCellValue(worksheet, TEMPLATE_INVOICE_CONFIG.cellMapping.itemNumber, 1)
   setCellValue(worksheet, TEMPLATE_INVOICE_CONFIG.cellMapping.itemName, materialName)
@@ -162,7 +174,11 @@ export async function exportTemplateInvoiceFile(input: InvoiceExportInput): Prom
   const downloadUrl = URL.createObjectURL(fileBlob)
   const temporaryLink = document.createElement("a")
   temporaryLink.href = downloadUrl
-  temporaryLink.download = buildOutputFileName(input.customerName)
+  temporaryLink.download = buildOutputFileName({
+    materialName,
+    customerName: input.customerName,
+    containerNumber: input.customerCode,
+  })
   temporaryLink.click()
   URL.revokeObjectURL(downloadUrl)
 }

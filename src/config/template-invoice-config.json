@@ -4,15 +4,14 @@
     "issueDate": "C4",
     "customerLine": "A5",
     "legalDocumentLine": "A6",
-    "phoneLine": "A7",
-    "addressLine": "A8",
-    "itemNumber": "A11",
-    "itemName": "B11",
-    "quantity": "C11",
-    "unitPrice": "D11",
-    "amount": "E11",
-    "subtotalAmount": "E21",
-    "totalAmount": "E23",
-    "requesterName": "D30"
+    "addressLine": "A7",
+    "itemNumber": "A10",
+    "itemName": "B10",
+    "quantity": "C10",
+    "unitPrice": "D10",
+    "amount": "E10",
+    "subtotalAmount": "E20",
+    "totalAmount": "E22",
+    "requesterName": "D29"
   }
 }
