@@ -451,6 +451,89 @@
           }
         }
       ]
+    },
+    {
+      "name": "TP",
+      "workbook": {
+        "sheetName": "Sheet1",
+        "headerRowIndex": 3,
+        "firstDataRowIndex": 4,
+        "stopKeywords": ["TOTAL", "Total", "GROSS MEASUREMENT", "NET MEASUREMENT"],
+        "stopIfEmpty": true
+      },
+      "columnMapping": {
+        "slabNoGross": "A",
+        "lengthGross": "B",
+        "widthGross": "C",
+        "slabNoNet": "E",
+        "lengthNet": "F",
+        "widthNet": "G",
+        "freshVar": "I"
+      },
+      "generalInfoMapping": {
+        "containerNumber": null,
+        "materialName": "A1:I1",
+        "typeOfPolish": null,
+        "numberOfSlabs": null,
+        "loadingDate": null,
+        "invoiceNumber": null,
+        "invoiceDate": null
+      }
+    },
+    {
+      "name": "TP (mix)",
+      "mixed": true,
+      "workbook": {
+        "sheetName": "Sheet1",
+        "headerRowIndex": 3,
+        "firstDataRowIndex": 4,
+        "stopKeywords": ["TOTAL", "Total", "GROSS MEASUREMENT", "NET MEASUREMENT"],
+        "stopIfEmpty": false
+      },
+      "sections": [
+        {
+          "name": "mix1",
+          "columnMapping": {
+            "slabNoGross": "A",
+            "lengthGross": "B",
+            "widthGross": "C",
+            "slabNoNet": "E",
+            "lengthNet": "F",
+            "widthNet": "G",
+            "freshVar": "I"
+          },
+          "generalInfoMapping": {
+            "containerNumber": null,
+            "materialName": "A1:I1",
+            "typeOfPolish": null,
+            "numberOfSlabs": null,
+            "loadingDate": null,
+            "invoiceNumber": null,
+            "invoiceDate": null
+          }
+        },
+        {
+          "name": "mix2",
+          "columnMapping": {
+            "slabNoGross": "A",
+            "lengthGross": "B",
+            "widthGross": "C",
+            "slabNoNet": "E",
+            "lengthNet": "F",
+            "widthNet": "G",
+            "freshVar": "I"
+          },
+          "generalInfoMapping": {
+            "containerNumber": null,
+            "materialName": "A1:I1",
+            "typeOfPolish": null,
+            "numberOfSlabs": null,
+            "loadingDate": null,
+            "invoiceNumber": null,
+            "invoiceDate": null
+          }
+        }
+      ]
     }
   ]
 }

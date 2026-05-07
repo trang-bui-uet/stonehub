@@ -11,6 +11,7 @@ import {
   ComboboxList,
 } from "@/components/ui/combobox"
 import { readAnMixWorkbookFromFile } from "@/lib/an-mix-workbook-reader"
+import { readTpMixWorkbookFromFile } from "@/lib/tp-mix-workbook-reader"
 import { readSveMixWorkbookFromFile } from "@/lib/sve-mix-workbook-reader"
 import { readVkMixWorkbookFromFile } from "@/lib/vk-mix-workbook-reader"
 import { readSupplierWorkbookFromFile } from "@/lib/supplier-workbook-reader"
@@ -48,10 +49,12 @@ type AyMixSupplierWorkbookData = Awaited<ReturnType<typeof readAyMixWorkbookFrom
 type AnMixSupplierWorkbookData = Awaited<ReturnType<typeof readAnMixWorkbookFromFile>>
 type SveMixSupplierWorkbookData = Awaited<ReturnType<typeof readSveMixWorkbookFromFile>>
 type VkMixSupplierWorkbookData = Awaited<ReturnType<typeof readVkMixWorkbookFromFile>>
+type TpMixSupplierWorkbookData = Awaited<ReturnType<typeof readTpMixWorkbookFromFile>>
 type MixSupplierWorkbookData =
   | AjMixSupplierWorkbookData
   | AyMixSupplierWorkbookData
   | AnMixSupplierWorkbookData
+  | TpMixSupplierWorkbookData
   | VkMixSupplierWorkbookData
   | SveMixSupplierWorkbookData
 type SupplierWorkbookData = StandardSupplierWorkbookData | MixSupplierWorkbookData
@@ -91,6 +94,7 @@ const AY_MIX_SUPPLIER_NAME = "AY (mix)"
 const AN_MIX_SUPPLIER_NAME = "AN (mix)"
 const SVE_MIX_SUPPLIER_NAME = "SVE (mix)"
 const VK_MIX_SUPPLIER_NAME = "VK (mix)"
+const TP_MIX_SUPPLIER_NAME = "TP (mix)"
 const CENTIMETER_SQUARE_TO_METER_SQUARE = 10_000
 const DEFAULT_DIMENSION_ADJUSTMENT_INPUT = "0"
 const EXCEL_FILE_ACCEPT = ".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
@@ -663,11 +667,24 @@ export default function CreateListPage(): ReactElement {
     return { ...workbookData, rows: getAdjustedRows(workbookData.rows, dimensionAdjustmentInCentimeter) }
   }, [dimensionAdjustmentInCentimeter, workbookData])
   const invoiceCustomerCode = useMemo((): string => resolveContainerNumber(adjustedWorkbookData), [adjustedWorkbookData])
+  function clearWorkbookState(): void {
+    setSelectedExcelFileName("")
+    setWorkbookData(null)
+    setErrorMessage("")
+    setDimensionAdjustmentInput(DEFAULT_DIMENSION_ADJUSTMENT_INPUT)
+    if (fileInputReference.current) {
+      fileInputReference.current.value = ""
+    }
+  }
   function handleSupplierNameChange(value: string | null): void {
     if (!value) {
       return
     }
+    if (value === selectedSupplierName) {
+      return
+    }
     setSelectedSupplierName(value)
+    clearWorkbookState()
   }
   function handleDimensionAdjustmentChange(value: string): void {
     if (value.trim() === "") {
@@ -687,13 +704,7 @@ export default function CreateListPage(): ReactElement {
     setDimensionAdjustmentInput((dimensionAdjustmentInCentimeter - 1).toString())
   }
   function handleClearSelectedFile(): void {
-    setSelectedExcelFileName("")
-    setWorkbookData(null)
-    setErrorMessage("")
-    setDimensionAdjustmentInput(DEFAULT_DIMENSION_ADJUSTMENT_INPUT)
-    if (fileInputReference.current) {
-      fileInputReference.current.value = ""
-    }
+    clearWorkbookState()
   }
   async function handleUploadFile(event: ChangeEvent<HTMLInputElement>): Promise<void> {
     const inputFile = event.target.files?.[0]
@@ -727,6 +738,8 @@ export default function CreateListPage(): ReactElement {
         parsedWorkbookData = await readSveMixWorkbookFromFile({ file: inputFile, supplierName: selectedSupplierName })
       } else if (selectedSupplierName === VK_MIX_SUPPLIER_NAME) {
         parsedWorkbookData = await readVkMixWorkbookFromFile({ file: inputFile, supplierName: selectedSupplierName })
+      } else if (selectedSupplierName === TP_MIX_SUPPLIER_NAME) {
+        parsedWorkbookData = await readTpMixWorkbookFromFile({ file: inputFile, supplierName: selectedSupplierName })
       } else {
         parsedWorkbookData = await readSupplierWorkbookFromFile({ file: inputFile, supplierName: selectedSupplierName })
       }
