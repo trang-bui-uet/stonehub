@@ -14,7 +14,7 @@ type SidebarNavItem = Readonly<{
 
 const SIDEBAR_NAV_ITEMS: SidebarNavItem[] = [
   { key: "create-list", label: "Tạo List", icon: FileSpreadsheet, to: "/admin/create-list" },
-  { key: "menu-b", label: "Menu B", icon: LayoutGrid, to: "/admin/menu-b" }
+  { key: "menu-b", label: "Xuất hóa đơn", icon: LayoutGrid, to: "/admin/menu-b" }
 ]
 
 /**

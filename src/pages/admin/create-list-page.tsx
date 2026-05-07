@@ -95,6 +95,7 @@ const AN_MIX_SUPPLIER_NAME = "AN (mix)"
 const SVE_MIX_SUPPLIER_NAME = "SVE (mix)"
 const VK_MIX_SUPPLIER_NAME = "VK (mix)"
 const TP_MIX_SUPPLIER_NAME = "TP (mix)"
+const TP_SUPPLIER_NAME = "TP"
 const CENTIMETER_SQUARE_TO_METER_SQUARE = 10_000
 const DEFAULT_DIMENSION_ADJUSTMENT_INPUT = "0"
 const EXCEL_FILE_ACCEPT = ".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
@@ -633,7 +634,10 @@ export default function CreateListPage(): ReactElement {
     DEFAULT_DIMENSION_ADJUSTMENT_INPUT,
   )
   const supplierNames = useMemo(
-    (): readonly string[] => SUPPLIER_CONFIG.suppliers.map((supplier: SupplierConfigItem): string => supplier.name),
+    (): readonly string[] =>
+      SUPPLIER_CONFIG.suppliers
+        .map((supplier: SupplierConfigItem): string => supplier.name)
+        .filter((supplierName: string): boolean => supplierName !== TP_SUPPLIER_NAME && supplierName !== TP_MIX_SUPPLIER_NAME),
     [],
   )
   const selectedSupplierConfig = useMemo(

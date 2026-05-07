@@ -28,6 +28,10 @@ type InvoiceExportInput = Readonly<{
   phoneNumber: string
   address: string
   unitPrice: number
+  unitPricesBySection?: readonly number[]
+  shippingFee?: number
+  immediateDiscount?: number
+  depositAmount?: number
   requesterName: string
 }>
 type TemplateInvoiceCellMapping = Readonly<{
@@ -60,8 +64,8 @@ function calculateSquareMeter(length: number | null, width: number | null): numb
   return (length * width) / CENTIMETER_SQUARE_TO_METER_SQUARE
 }
 
-function roundNumberToThreeDigits(value: number): number {
-  return Math.round(value * 1000) / 1000
+function roundNumberToTwoDigits(value: number): number {
+  return Math.round(value * 100) / 100
 }
 
 function normalizeText(value: string): string {
@@ -75,14 +79,14 @@ function isMixWorkbookData(workbookData: SupplierWorkbookData): workbookData is 
 function resolveTotalNetSquareMeter(workbookData: SupplierWorkbookData): number {
   if (!isMixWorkbookData(workbookData)) {
     const totalValue = workbookData.rows.reduce((sum: number, row: SupplierSlabRow): number => sum + calculateSquareMeter(row.lengthNet, row.widthNet), 0)
-    return roundNumberToThreeDigits(totalValue)
+    return roundNumberToTwoDigits(totalValue)
   }
   const totalValue = workbookData.sections.reduce(
     (sectionSum: number, section): number =>
       sectionSum + section.rows.reduce((rowSum: number, row: SupplierSlabRow): number => rowSum + calculateSquareMeter(row.lengthNet, row.widthNet), 0),
     0,
   )
-  return roundNumberToThreeDigits(totalValue)
+  return roundNumberToTwoDigits(totalValue)
 }
 
 function resolveMaterialName(workbookData: SupplierWorkbookData): string {
@@ -128,6 +132,79 @@ function buildOutputFileName(input: OutputFileNameInput): string {
 function setCellValue(worksheet: ExcelJS.Worksheet, cellAddress: string, value: string | number): void {
   worksheet.getCell(cellAddress).value = value
 }
+function setQuantityCellValue(worksheet: ExcelJS.Worksheet, cellAddress: string, quantity: number): void {
+  const quantityCell = worksheet.getCell(cellAddress)
+  quantityCell.value = roundNumberToTwoDigits(quantity)
+  quantityCell.numFmt = "0.00"
+}
+function setMoneyCellValue(worksheet: ExcelJS.Worksheet, cellAddress: string, amount: number): void {
+  const amountCell = worksheet.getCell(cellAddress)
+  amountCell.value = Math.round(amount)
+  amountCell.numFmt = "#,##0"
+}
+function setSumFormulaCellValue(worksheet: ExcelJS.Worksheet, cellAddress: string, formula: string): void {
+  const formulaCell = worksheet.getCell(cellAddress)
+  formulaCell.value = { formula }
+  formulaCell.numFmt = "#,##0"
+}
+function offsetCellAddress(baseCellAddress: string, rowOffset: number): string {
+  if (rowOffset === 0) {
+    return baseCellAddress
+  }
+  const match = /^([A-Z]+)(\d+)$/.exec(baseCellAddress)
+  if (!match) {
+    return baseCellAddress
+  }
+  const columnPart = match[1]
+  const rowPart = Number(match[2])
+  return `${columnPart}${rowPart + rowOffset}`
+}
+type InvoiceLineItem = Readonly<{
+  itemName: string
+  quantity: number
+  unitPrice: number
+}>
+type InvoiceAdjustmentLine = Readonly<{
+  itemName: string
+  amount: number
+}>
+function resolveInvoiceLineItems(input: InvoiceExportInput): readonly InvoiceLineItem[] {
+  if (!isMixWorkbookData(input.workbookData) || !input.unitPricesBySection || input.unitPricesBySection.length < 2) {
+    const materialName = resolveMaterialName(input.workbookData)
+    const netSquareMeter = resolveTotalNetSquareMeter(input.workbookData)
+    return [{ itemName: materialName, quantity: netSquareMeter, unitPrice: input.unitPrice }]
+  }
+  return input.workbookData.sections.map((section, index: number): InvoiceLineItem => {
+    const sectionMaterialName = normalizeText(section.generalInfo.materialName) || `${DEFAULT_ITEM_NAME} ${index + 1}`
+    const sectionQuantity = roundNumberToTwoDigits(
+      section.rows.reduce((sum: number, row: SupplierSlabRow): number => sum + calculateSquareMeter(row.lengthNet, row.widthNet), 0),
+    )
+    const sectionUnitPrice = input.unitPricesBySection?.[index] ?? input.unitPrice
+    return {
+      itemName: sectionMaterialName,
+      quantity: sectionQuantity,
+      unitPrice: sectionUnitPrice,
+    }
+  })
+}
+function isPositiveAmount(value: number): boolean {
+  return Number.isFinite(value) && value > 0
+}
+function writeInvoiceAdjustmentLine(
+  worksheet: ExcelJS.Worksheet,
+  rowOffset: number,
+  itemNumber: number,
+  line: InvoiceAdjustmentLine,
+): void {
+  setCellValue(worksheet, offsetCellAddress(TEMPLATE_INVOICE_CONFIG.cellMapping.itemNumber, rowOffset), itemNumber)
+  setCellValue(worksheet, offsetCellAddress(TEMPLATE_INVOICE_CONFIG.cellMapping.itemName, rowOffset), line.itemName)
+  setMoneyCellValue(worksheet, offsetCellAddress(TEMPLATE_INVOICE_CONFIG.cellMapping.amount, rowOffset), line.amount)
+}
+function buildAmountSumFormula(): string {
+  const startCellAddress = TEMPLATE_INVOICE_CONFIG.cellMapping.amount
+  const endCellAddress = offsetCellAddress(startCellAddress, 9)
+  return `SUM(${startCellAddress}:${endCellAddress})`
+}
 
 /**
  * Export invoice file from the invoice template.
@@ -145,8 +222,10 @@ export async function exportTemplateInvoiceFile(input: InvoiceExportInput): Prom
     throw new Error("Template hóa đơn không có sheet hợp lệ.")
   }
   const materialName = resolveMaterialName(input.workbookData)
-  const netSquareMeter = resolveTotalNetSquareMeter(input.workbookData)
-  const totalAmount = Math.round(netSquareMeter * input.unitPrice)
+  const invoiceLineItems = resolveInvoiceLineItems(input)
+  const shippingFee = input.shippingFee ?? 0
+  const immediateDiscount = input.immediateDiscount ?? 0
+  const depositAmount = input.depositAmount ?? 0
   setCellValue(worksheet, TEMPLATE_INVOICE_CONFIG.cellMapping.issueDate, formatCurrentDateLabel())
   setCellValue(
     worksheet,
@@ -159,13 +238,58 @@ export async function exportTemplateInvoiceFile(input: InvoiceExportInput): Prom
     `Số giấy tờ pháp lý của cá nhân: ${normalizeText(input.legalDocument)}`,
   )
   setCellValue(worksheet, TEMPLATE_INVOICE_CONFIG.cellMapping.addressLine, `Địa chỉ: ${normalizeText(input.address)}`)
-  setCellValue(worksheet, TEMPLATE_INVOICE_CONFIG.cellMapping.itemNumber, 1)
-  setCellValue(worksheet, TEMPLATE_INVOICE_CONFIG.cellMapping.itemName, materialName)
-  setCellValue(worksheet, TEMPLATE_INVOICE_CONFIG.cellMapping.quantity, netSquareMeter)
-  setCellValue(worksheet, TEMPLATE_INVOICE_CONFIG.cellMapping.unitPrice, input.unitPrice)
-  setCellValue(worksheet, TEMPLATE_INVOICE_CONFIG.cellMapping.amount, totalAmount)
-  setCellValue(worksheet, TEMPLATE_INVOICE_CONFIG.cellMapping.subtotalAmount, totalAmount)
-  setCellValue(worksheet, TEMPLATE_INVOICE_CONFIG.cellMapping.totalAmount, totalAmount)
+  invoiceLineItems.forEach((lineItem: InvoiceLineItem, index: number): void => {
+    const amount = roundNumberToTwoDigits(lineItem.quantity * lineItem.unitPrice)
+    setCellValue(worksheet, offsetCellAddress(TEMPLATE_INVOICE_CONFIG.cellMapping.itemNumber, index), index + 1)
+    setCellValue(worksheet, offsetCellAddress(TEMPLATE_INVOICE_CONFIG.cellMapping.itemName, index), lineItem.itemName)
+    setQuantityCellValue(worksheet, offsetCellAddress(TEMPLATE_INVOICE_CONFIG.cellMapping.quantity, index), lineItem.quantity)
+    setMoneyCellValue(worksheet, offsetCellAddress(TEMPLATE_INVOICE_CONFIG.cellMapping.unitPrice, index), lineItem.unitPrice)
+    setMoneyCellValue(worksheet, offsetCellAddress(TEMPLATE_INVOICE_CONFIG.cellMapping.amount, index), amount)
+  })
+  let nextItemNumber = invoiceLineItems.length + 1
+  let nextRowOffset = invoiceLineItems.length
+  if (isPositiveAmount(shippingFee)) {
+    writeInvoiceAdjustmentLine(
+      worksheet,
+      nextRowOffset,
+      nextItemNumber,
+      {
+        itemName: "Cước vận chuyển",
+        amount: shippingFee,
+      },
+    )
+    nextItemNumber += 1
+    nextRowOffset += 1
+  }
+  const discountAndDepositAnchorItemNumber = 10
+  let currentAdjustmentOffset = discountAndDepositAnchorItemNumber - 1
+  let currentAdjustmentItemNumber = discountAndDepositAnchorItemNumber
+  if (isPositiveAmount(immediateDiscount)) {
+    writeInvoiceAdjustmentLine(
+      worksheet,
+      currentAdjustmentOffset,
+      currentAdjustmentItemNumber,
+      {
+        itemName: "Trừ chiết khấu tiền ngay",
+        amount: -immediateDiscount,
+      },
+    )
+    currentAdjustmentOffset -= 1
+    currentAdjustmentItemNumber -= 1
+  }
+  if (isPositiveAmount(depositAmount)) {
+    writeInvoiceAdjustmentLine(
+      worksheet,
+      currentAdjustmentOffset,
+      currentAdjustmentItemNumber,
+      {
+        itemName: "Trừ cọc",
+        amount: -depositAmount,
+      },
+    )
+  }
+  setSumFormulaCellValue(worksheet, TEMPLATE_INVOICE_CONFIG.cellMapping.subtotalAmount, buildAmountSumFormula())
+  setCellValue(worksheet, TEMPLATE_INVOICE_CONFIG.cellMapping.totalAmount, "")
   setCellValue(worksheet, TEMPLATE_INVOICE_CONFIG.cellMapping.requesterName, normalizeText(input.requesterName))
   const outputBuffer = await workbook.xlsx.writeBuffer()
   const fileBlob = new Blob([outputBuffer], {
