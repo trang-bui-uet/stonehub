@@ -15,24 +15,11 @@ import { readTpMixWorkbookFromFile } from "@/lib/tp-mix-workbook-reader"
 import { readSveMixWorkbookFromFile } from "@/lib/sve-mix-workbook-reader"
 import { readVkMixWorkbookFromFile } from "@/lib/vk-mix-workbook-reader"
 import { readSupplierWorkbookFromFile } from "@/lib/supplier-workbook-reader"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from "@/components/ui/input-group"
-import { Label } from "@/components/ui/label"
-import { exportTemplateInvoiceFile } from "@/lib/template-invoice-exporter"
 import { exportTemplateMixFile } from "@/lib/template-mix-exporter"
 import { exportSupplierListFile } from "@/lib/template-list-exporter"
-import { ImagePlus, LoaderCircle, Minus, Plus, Upload, X } from "lucide-react"
+import { Minus, Plus, X } from "lucide-react"
 import type { ChangeEvent, ReactElement } from "react"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 
 type SupplierConfigItem = Readonly<{
   name: string
@@ -61,32 +48,6 @@ type SupplierWorkbookData = StandardSupplierWorkbookData | MixSupplierWorkbookDa
 type SupplierSlabRow = StandardSupplierWorkbookData["rows"][number]
 type SupplierGeneralInfo = StandardSupplierWorkbookData["generalInfo"]
 type MixSectionData = MixSupplierWorkbookData["sections"][number]
-type InvoiceFormData = Readonly<{
-  customerName: string
-  customerCode: string
-  legalDocument: string
-  address: string
-  unitPrice: string
-  requesterName: string
-}>
-type InvoiceExportDialogProps = Readonly<{
-  workbookData: SupplierWorkbookData | null
-  isDisabled: boolean
-  defaultCustomerCode: string
-}>
-type InvoiceOcrData = Readonly<{
-  organization_name: string | null
-  tax_code: string | null
-  address: string | null
-  legal_representative: string | null
-  phone_number: string | null
-  email: string | null
-  raw_text: string
-}>
-type InvoiceOcrResponse = Readonly<{
-  status: string
-  data: InvoiceOcrData
-}>
 
 const SUPPLIER_CONFIG: SupplierConfigRoot = supplierConfigJson as SupplierConfigRoot
 const AJ_MIX_SUPPLIER_NAME = "AJ (mix)"
@@ -104,307 +65,13 @@ const EXCEL_FILE_MIME_TYPES = [
   "application/vnd.ms-excel",
 ] as const
 const EXCEL_FILE_EXTENSIONS = [".xlsx", ".xls"] as const
-const IMAGE_FILE_ACCEPT = "image/png,image/jpeg,image/jpg,image/webp,image/gif"
-const IMAGE_FILE_MIME_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif"] as const
-const OCR_API_ENDPOINT = `${(import.meta.env.VITE_STONEHUB_BE_URL as string | undefined) ?? "http://127.0.0.1:8000"}/api/v1/invoices/extract`
 const VARIANT_DISPLAY_VALUE = "V"
-const DEFAULT_INVOICE_FORM_DATA: InvoiceFormData = {
-  customerName: "",
-  customerCode: "",
-  legalDocument: "",
-  address: "",
-  unitPrice: "0",
-  requesterName: "Vũ Thanh Thùy",
-}
 
 function getFreshVariantDisplayValue(value: SupplierSlabRow["freshVar"] | undefined): string {
   if (value === "Var") {
     return VARIANT_DISPLAY_VALUE
   }
   return ""
-}
-
-function resolveContainerNumber(workbookData: SupplierWorkbookData | null): string {
-  if (!workbookData) {
-    return ""
-  }
-  if (isMixWorkbookData(workbookData)) {
-    return workbookData.sections[0]?.generalInfo.containerNumber ?? ""
-  }
-  return workbookData.generalInfo.containerNumber ?? ""
-}
-
-function InvoiceExportDialog(props: InvoiceExportDialogProps): ReactElement {
-  const customerImageInputReference = useRef<HTMLInputElement | null>(null)
-  const [isOpen, setIsOpen] = useState<boolean>(false)
-  const [isCreatingInvoice, setIsCreatingInvoice] = useState<boolean>(false)
-  const [isExtractingCustomerInfo, setIsExtractingCustomerInfo] = useState<boolean>(false)
-  const [uploadedCustomerImageName, setUploadedCustomerImageName] = useState<string>("")
-  const [isCustomerImageDragOver, setIsCustomerImageDragOver] = useState<boolean>(false)
-  const [invoiceErrorMessage, setInvoiceErrorMessage] = useState<string>("")
-  const [invoiceFormData, setInvoiceFormData] = useState<InvoiceFormData>({
-    ...DEFAULT_INVOICE_FORM_DATA,
-    customerCode: props.defaultCustomerCode,
-  })
-  useEffect((): void => {
-    if (!isOpen) {
-      return
-    }
-    setInvoiceFormData({
-      ...DEFAULT_INVOICE_FORM_DATA,
-      customerCode: props.defaultCustomerCode,
-    })
-    setUploadedCustomerImageName("")
-    setIsCustomerImageDragOver(false)
-    setInvoiceErrorMessage("")
-  }, [isOpen, props.defaultCustomerCode])
-  useEffect((): (() => void) | void => {
-    if (!isOpen) {
-      return
-    }
-    async function handleWindowPaste(event: ClipboardEvent): Promise<void> {
-      const clipboardFile = resolveImageFileFromClipboard(event.clipboardData)
-      if (!clipboardFile) {
-        return
-      }
-      event.preventDefault()
-      await extractCustomerInfoFromImageFile(clipboardFile)
-    }
-    window.addEventListener("paste", handleWindowPaste)
-    return (): void => {
-      window.removeEventListener("paste", handleWindowPaste)
-    }
-  }, [isOpen, invoiceFormData.customerCode])
-  function handleInvoiceFieldChange(fieldName: keyof InvoiceFormData, value: string): void {
-    setInvoiceFormData((currentData: InvoiceFormData): InvoiceFormData => ({ ...currentData, [fieldName]: value }))
-  }
-  function resolveImageFileFromClipboard(clipboardData: DataTransfer | null): File | null {
-    if (!clipboardData) {
-      return null
-    }
-    const imageItem = Array.from(clipboardData.items).find(
-      (clipboardItem: DataTransferItem): boolean => clipboardItem.kind === "file" && clipboardItem.type.startsWith("image/"),
-    )
-    if (!imageItem) {
-      return null
-    }
-    return imageItem.getAsFile()
-  }
-  function isImageFile(file: File): boolean {
-    return IMAGE_FILE_MIME_TYPES.includes(file.type as (typeof IMAGE_FILE_MIME_TYPES)[number])
-  }
-  async function extractCustomerInfoFromImageFile(file: File): Promise<void> {
-    if (!isImageFile(file)) {
-      setInvoiceErrorMessage("Chỉ chấp nhận ảnh PNG, JPG, WEBP hoặc GIF.")
-      return
-    }
-    setIsExtractingCustomerInfo(true)
-    setInvoiceErrorMessage("")
-    setUploadedCustomerImageName(file.name || "clipboard-image.png")
-    try {
-      const formData = new FormData()
-      formData.append("image", file)
-      const response = await fetch(OCR_API_ENDPOINT, {
-        method: "POST",
-        body: formData,
-      })
-      const responseBody = (await response.json()) as InvoiceOcrResponse | { detail?: string }
-      if (!response.ok) {
-        const detailMessage = "detail" in responseBody && typeof responseBody.detail === "string" ? responseBody.detail : "Không thể trích xuất thông tin từ ảnh."
-        throw new Error(detailMessage)
-      }
-      if (!("data" in responseBody)) {
-        throw new Error("Phản hồi OCR không hợp lệ.")
-      }
-      const extractedData = responseBody.data
-      setInvoiceFormData((currentData: InvoiceFormData): InvoiceFormData => ({
-        ...currentData,
-        customerName: extractedData.organization_name ?? currentData.customerName,
-        legalDocument: extractedData.tax_code ?? currentData.legalDocument,
-        address: extractedData.address ?? currentData.address,
-      }))
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Không thể đọc thông tin khách hàng từ ảnh."
-      setInvoiceErrorMessage(message)
-    } finally {
-      setIsExtractingCustomerInfo(false)
-    }
-  }
-  async function handleCustomerImageInputChange(event: ChangeEvent<HTMLInputElement>): Promise<void> {
-    const imageFile = event.target.files?.[0]
-    if (!imageFile) {
-      return
-    }
-    await extractCustomerInfoFromImageFile(imageFile)
-    event.target.value = ""
-  }
-  async function handleCustomerImageDrop(event: React.DragEvent<HTMLDivElement>): Promise<void> {
-    event.preventDefault()
-    setIsCustomerImageDragOver(false)
-    const droppedFile = event.dataTransfer.files[0]
-    if (!droppedFile) {
-      return
-    }
-    await extractCustomerInfoFromImageFile(droppedFile)
-  }
-  function handleCustomerImageDragOver(event: React.DragEvent<HTMLDivElement>): void {
-    event.preventDefault()
-    setIsCustomerImageDragOver(true)
-  }
-  function handleCustomerImageDragLeave(event: React.DragEvent<HTMLDivElement>): void {
-    event.preventDefault()
-    setIsCustomerImageDragOver(false)
-  }
-  async function handleCreateInvoice(): Promise<void> {
-    if (!props.workbookData) {
-      setInvoiceErrorMessage("Vui lòng tải dữ liệu trước khi xuất hóa đơn.")
-      return
-    }
-    const trimmedUnitPrice = invoiceFormData.unitPrice.trim()
-    const parsedUnitPrice = trimmedUnitPrice === "" ? 0 : Number(trimmedUnitPrice)
-    if (Number.isNaN(parsedUnitPrice) || parsedUnitPrice <= 0) {
-      setInvoiceErrorMessage("Đơn giá phải lớn hơn 0.")
-      return
-    }
-    setInvoiceErrorMessage("")
-    setIsCreatingInvoice(true)
-    try {
-      await exportTemplateInvoiceFile({
-        workbookData: props.workbookData as StandardSupplierWorkbookData | MixSupplierWorkbookData,
-        customerName: invoiceFormData.customerName,
-        customerCode: invoiceFormData.customerCode,
-        legalDocument: invoiceFormData.legalDocument,
-        phoneNumber: "",
-        address: invoiceFormData.address,
-        unitPrice: parsedUnitPrice,
-        requesterName: invoiceFormData.requesterName,
-      })
-      setIsOpen(false)
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Không thể xuất hóa đơn."
-      setInvoiceErrorMessage(message)
-    } finally {
-      setIsCreatingInvoice(false)
-    }
-  }
-  return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        <Button type="button" size="default" variant="outline" disabled={props.isDisabled}>
-          Xuất hóa đơn
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-xl">
-        <DialogHeader>
-          <DialogTitle>Xuất hóa đơn</DialogTitle>
-          <DialogDescription>Nhập thông tin khách hàng và đơn giá. Số lượng sẽ lấy theo Net SQM.</DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-3 py-1">
-          <div className="grid gap-2">
-            <Label htmlFor="invoice-customer-image-upload">Ảnh thông tin khách hàng</Label>
-            <div
-              className={`flex min-h-24 cursor-pointer flex-col items-center justify-center rounded-md border border-dashed px-3 py-2 text-center ${isCustomerImageDragOver ? "border-primary bg-primary/5" : ""}`}
-              onClick={(): void => customerImageInputReference.current?.click()}
-              onDrop={handleCustomerImageDrop}
-              onDragOver={handleCustomerImageDragOver}
-              onDragLeave={handleCustomerImageDragLeave}
-            >
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <Upload className="size-4" />
-                <span>Kéo thả hoặc bấm để tải ảnh</span>
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground">Hỗ trợ paste từ clipboard (Ctrl+V) khi popup đang mở.</p>
-              {uploadedCustomerImageName ? (
-                <div className="mt-2 flex items-center gap-1 text-xs">
-                  {isExtractingCustomerInfo ? <LoaderCircle className="size-3 animate-spin" /> : <ImagePlus className="size-3" />}
-                  <span>{uploadedCustomerImageName}</span>
-                </div>
-              ) : null}
-              <input
-                ref={customerImageInputReference}
-                id="invoice-customer-image-upload"
-                className="hidden"
-                type="file"
-                accept={IMAGE_FILE_ACCEPT}
-                onChange={handleCustomerImageInputChange}
-                disabled={isExtractingCustomerInfo || isCreatingInvoice}
-              />
-            </div>
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="invoice-customer-name">Họ tên người mua hàng</Label>
-            <Input
-              id="invoice-customer-name"
-              value={invoiceFormData.customerName}
-              disabled={isExtractingCustomerInfo}
-              onChange={(event: ChangeEvent<HTMLInputElement>): void => handleInvoiceFieldChange("customerName", event.target.value)}
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="invoice-customer-code">Mã cont</Label>
-            <Input
-              id="invoice-customer-code"
-              value={invoiceFormData.customerCode}
-              disabled={isExtractingCustomerInfo}
-              onChange={(event: ChangeEvent<HTMLInputElement>): void => handleInvoiceFieldChange("customerCode", event.target.value)}
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="invoice-legal-document">Số giấy tờ pháp lý</Label>
-            <Input
-              id="invoice-legal-document"
-              value={invoiceFormData.legalDocument}
-              disabled={isExtractingCustomerInfo}
-              onChange={(event: ChangeEvent<HTMLInputElement>): void => handleInvoiceFieldChange("legalDocument", event.target.value)}
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="invoice-address">Địa chỉ</Label>
-            <Input
-              id="invoice-address"
-              value={invoiceFormData.address}
-              disabled={isExtractingCustomerInfo}
-              onChange={(event: ChangeEvent<HTMLInputElement>): void => handleInvoiceFieldChange("address", event.target.value)}
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="invoice-unit-price">Đơn giá</Label>
-            <InputGroup>
-              <InputGroupInput
-                id="invoice-unit-price"
-                type="number"
-                min="0"
-                step="1000"
-                value={invoiceFormData.unitPrice}
-                disabled={isExtractingCustomerInfo}
-                onChange={(event: ChangeEvent<HTMLInputElement>): void => handleInvoiceFieldChange("unitPrice", event.target.value)}
-              />
-              <InputGroupAddon align="inline-end">
-                <InputGroupText>VND</InputGroupText>
-              </InputGroupAddon>
-            </InputGroup>
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="invoice-requester-name">Người đề nghị xuất hóa đơn</Label>
-            <Input
-              id="invoice-requester-name"
-              value={invoiceFormData.requesterName}
-              disabled={isExtractingCustomerInfo}
-              onChange={(event: ChangeEvent<HTMLInputElement>): void => handleInvoiceFieldChange("requesterName", event.target.value)}
-            />
-          </div>
-        </div>
-        {invoiceErrorMessage ? (
-          <p className="rounded-md border border-red-400 bg-red-50 px-3 py-2 text-sm text-red-700">{invoiceErrorMessage}</p>
-        ) : null}
-        <DialogFooter>
-          <Button type="button" onClick={handleCreateInvoice} disabled={isCreatingInvoice || isExtractingCustomerInfo}>
-            {isCreatingInvoice ? "Đang xuất hóa đơn..." : "Xuất hóa đơn"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
 }
 
 function roundNumberToTwoDigits(value: number): number {
@@ -670,7 +337,6 @@ export default function CreateListPage(): ReactElement {
     }
     return { ...workbookData, rows: getAdjustedRows(workbookData.rows, dimensionAdjustmentInCentimeter) }
   }, [dimensionAdjustmentInCentimeter, workbookData])
-  const invoiceCustomerCode = useMemo((): string => resolveContainerNumber(adjustedWorkbookData), [adjustedWorkbookData])
   function clearWorkbookState(): void {
     setSelectedExcelFileName("")
     setWorkbookData(null)
@@ -883,22 +549,15 @@ export default function CreateListPage(): ReactElement {
           </label>
         </div>
         <div className="flex justify-start">
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-            <Button
-              type="button"
-              size="default"
-              className="w-full sm:w-auto"
-              onClick={handleCreateList}
-              disabled={!workbookData || isCreatingList || isReadingFile}
-            >
-              {isCreatingList ? "Đang tạo list..." : "Tạo List"}
-            </Button>
-            <InvoiceExportDialog
-              workbookData={adjustedWorkbookData}
-              isDisabled={!workbookData || isReadingFile || isCreatingList}
-              defaultCustomerCode={invoiceCustomerCode}
-            />
-          </div>
+          <Button
+            type="button"
+            size="default"
+            className="w-full sm:w-auto"
+            onClick={handleCreateList}
+            disabled={!workbookData || isCreatingList || isReadingFile}
+          >
+            {isCreatingList ? "Đang tạo list..." : "Tạo List"}
+          </Button>
         </div>
       </section>
       {adjustedWorkbookData ? (
