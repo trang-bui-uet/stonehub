@@ -10,7 +10,7 @@ export default defineConfig({
   ],
   server: {
     host: true,
-    allowedHosts: ['.ngrok-free.dev'],
+    allowedHosts: ['.ngrok-free.dev', '.trycloudflare.com'],
   },
   resolve: {
     alias: {

@@ -60,7 +60,8 @@ const EXCEL_FILE_MIME_TYPES = [
 const EXCEL_FILE_EXTENSIONS = [".xlsx", ".xls"] as const
 const IMAGE_FILE_ACCEPT = "image/png,image/jpeg,image/jpg,image/webp,image/gif"
 const IMAGE_FILE_MIME_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif"] as const
-const OCR_API_ENDPOINT = `${(import.meta.env.VITE_STONEHUB_BE_URL as string | undefined) ?? "http://127.0.0.1:8000"}/api/v1/invoices/extract`
+const STONEHUB_BE_URL = ((import.meta.env.VITE_STONEHUB_BE_URL as string | undefined) ?? "http://127.0.0.1:8000").replace(/\/$/, "")
+const OCR_API_ENDPOINT = `${STONEHUB_BE_URL}/api/v1/invoices/extract`
 const SLAB_NO_TOKEN = "SLAB NO."
 const PRICE_FIELD_NAMES: readonly (keyof InvoiceFormData)[] = [
   "unitPrice",
@@ -238,9 +239,8 @@ function InvoiceExportDialog(props: InvoiceExportDialogProps): ReactElement {
         legalDocument: extractedData.tax_code ?? currentData.legalDocument,
         address: extractedData.address ?? currentData.address,
       }))
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Không thể đọc thông tin khách hàng từ ảnh."
-      setInvoiceErrorMessage(message)
+    } catch (_err: unknown) {
+      setInvoiceErrorMessage("Không thể đọc ảnh thông tin khách hàng")
     } finally {
       setIsExtractingCustomerInfo(false)
     }
